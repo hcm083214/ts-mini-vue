@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Mini Vue - 完整版</title>
+</head>
+<body>
+    <div id="app"></div>
+
+    <script>
+        // ====================
+        // 1. 响应式系统 (Reactivity)
+        // ====================
+        let activeEffect = null;
+        const targetMap = new WeakMap();
+
+        function effect(fn) {
+            activeEffect = fn;
+            fn();
+            activeEffect = null;
+        }
+
+        function track(target, key) {
+            if (!activeEffect) return;
+            let depsMap = targetMap.get(target);
+            if (!depsMap) {
+                targetMap.set(target, (depsMap = new Map()));
+            }
+            let deps = depsMap.get(key);
+            if (!deps) {
+                depsMap.set(key, (deps = new Set()));
+            }
+            if (!deps.has(activeEffect)) {
+                deps.add(activeEffect);
+            }
+        }
+
+        function trigger(target, key) {
+            const depsMap = targetMap.get(target);
+            if (!depsMap) return;
+            const deps = depsMap.get(key);
+            if (deps) {
+                deps.forEach(effectFn => effectFn());
+            }
+        }
+
+        function reactive(raw) {
+            return new Proxy(raw, {
+                get(target, key, receiver) {
+                    track(target, key);
+                    return Reflect.get(target, key, receiver);
+                },
+                set(target, key, value, receiver) {
+                    const oldValue = target[key];
+                    const result = Reflect.set(target, key, value, receiver);
+                    if (oldValue !== value) {
+                        trigger(target, key);
+                    }
+                    return result;
+                }
+            });
+        }
+
+        // ====================
+        // 2. 渲染器 (Renderer)
+        // ====================
+        const ShapeFlags = {
+            ELEMENT: 1,
+            STATEFUL_COMPONENT: 4
+        };
+
+        function createVNode(type, props, children) {
+            const shapeFlag = typeof type === 'string'
+                ? ShapeFlags.ELEMENT
+                : ShapeFlags.STATEFUL_COMPONENT;
+            return {
+                type,
+                props,
+                children,
+                shapeFlag,
+                el: null,
+                key: props ? props.key : null
+            };
+        }
+
+        const h = createVNode;
+
+        function mount(vnode, container) {
+            if (vnode.shapeFlag & ShapeFlags.ELEMENT) {
+                mountElement(vnode, container);
+            } else if (vnode.shapeFlag & ShapeFlags.STATEFUL_COMPONENT) {
+                mountComponent(vnode, container);
+            }
+        }
+
+        function mountElement(vnode, container) {
+            const el = (vnode.el = document.createElement(vnode.type));
+            const { props, children } = vnode;
+
+            for (const key in props) {
+                const val = props[key];
+                if (key.startsWith('on')) {
+                    el.addEventListener(key.slice(2).toLowerCase(), val);
+                } else {
+                    el.setAttribute(key, val);
+                }
+            }
+
+            if (typeof children === 'string') {
+                el.textContent = children;
+            } else if (Array.isArray(children)) {
+                children.forEach(child => {
+                    if (typeof child === 'string') {
+                        el.appendChild(document.createTextNode(child));
+                    } else {
+                        mount(child, el);
+                    }
+                });
+            }
+
+            container.appendChild(el);
+        }
+
+        function mountComponent(vnode, container) {
+            const component = vnode.type;
+            const instance = {
+                data: component.data ? component.data() : {},
+                render: component.render
+            };
+            vnode.component = instance;
+
+            const reactiveData = reactive(instance.data);
+            instance.render = instance.render.bind(reactiveData);
+
+            let subTree;
+            effect(() => {
+                subTree = instance.render();
+                if (vnode.el) {
+                    patch(instance.subTree, subTree, container);
+                } else {
+                    mount(subTree, container);
+                    vnode.el = subTree.el;
+                }
+                instance.subTree = subTree;
+            });
+        }
+
+        function patch(n1, n2, container) {
+            if (n1.type !== n2.type) {
+                const parent = n1.el.parentNode;
+                parent.removeChild(n1.el);
+                mount(n2, parent);
+            } else {
+                const el = (n2.el = n1.el);
+                if (n2.shapeFlag & ShapeFlags.ELEMENT) {
+                    patchElement(n1, n2);
+                } else if (n2.shapeFlag & ShapeFlags.STATEFUL_COMPONENT) {
+                    // 组件更新逻辑简化处理
+                    const instance = n2.component;
+                    if (instance) {
+                        effect(() => {
+                            const subTree = instance.render();
+                            patch(instance.subTree, subTree, container);
+                            instance.subTree = subTree;
+                        });
+                    }
+                }
+            }
+        }
+
+        function patchElement(n1, n2) {
+            const el = n2.el;
+            const oldProps = n1.props || {};
+            const newProps = n2.props || {};
+
+            for (const key in newProps) {
+                const prevVal = oldProps[key];
+                const nextVal = newProps[key];
+                if (prevVal !== nextVal) {
+                    if (key.startsWith('on')) {
+                        el.addEventListener(key.slice(2).toLowerCase(), nextVal);
+                    } else {
+                        el.setAttribute(key, nextVal);
+                    }
+                }
+            }
+
+            for (const key in oldProps) {
+                if (!(key in newProps)) {
+                    if (key.startsWith('on')) {
+                        el.removeEventListener(key.slice(2).toLowerCase(), oldProps[key]);
+                    } else {
+                        el.removeAttribute(key);
+                    }
+                }
+            }
+
+            patchChildren(n1, n2, el);
+        }
+
+        function patchChildren(n1, n2, container) {
+            const c1 = n1.children;
+            const c2 = n2.children;
+
+            if (typeof c2 === 'string') {
+                if (Array.isArray(c1)) {
+                    c1.forEach(child => container.removeChild(child.el));
+                }
+                container.textContent = c2;
+                return;
+            }
+
+            if (typeof c1 === 'string') {
+                container.textContent = '';
+                c2.forEach(child => mount(child, container));
+                return;
+            }
+
+            if (Array.isArray(c1) && Array.isArray(c2)) {
+                const oldLen = c1.length;
+                const newLen = c2.length;
+                const commonLen = Math.min(oldLen, newLen);
+
+                for (let i = 0; i < commonLen; i++) {
+                    patch(c1[i], c2[i]);
+                }
+
+                if (newLen > oldLen) {
+                    for (let i = commonLen; i < newLen; i++) {
+                        mount(c2[i], container);
+                    }
+                } else if (oldLen > newLen) {
+                    for (let i = commonLen; i < oldLen; i++) {
+                        container.removeChild(c1[i].el);
+                    }
+                }
+            }
+        }
+
+        function render(vnode, container) {
+            if (vnode === null) {
+                container.innerHTML = '';
+                return;
+            }
+            if (!container._vnode) {
+                mount(vnode, container);
+            } else {
+                patch(container._vnode, vnode);
+            }
+            container._vnode = vnode;
+        }
+
+        // ====================
+        // 3. 编译器 (Compiler) - 极简版
+        // ====================
+        function compileToFunction(template) {
+            template = template.trim();
+            const content = template.replace(/^<\w+>|<\/\w+>$/g, '');
+            const parsedContent = content.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, key) => {
+                return `" + (_ctx.${key}) + "`;
+            });
+            return new Function('_ctx', `
+                return h('div', null, "${parsedContent}");
+            `);
+        }
+
+        // ====================
+        // 4. 应用入口 (createApp)
+        // ====================
+        function createApp(options) {
+            const app = {
+                _component: options,
+                mount(selector) {
+                    const container = document.querySelector(selector);
+                    const data = options.data ? options.data() : {};
+                    const reactiveData = reactive(data);
+
+                    let renderFn;
+                    if (options.render) {
+                        renderFn = options.render;
+                    } else if (options.template) {
+                        renderFn = compileToFunction(options.template);
+                    } else {
+                        throw new Error('缺少 render 函数或 template 选项');
+                    }
+
+                    effect(() => {
+                        const vnode = renderFn(reactiveData);
+                        render(vnode, container);
+                    });
+                }
+            };
+            return app;
+        }
+
+        // --- 导出 API ---
+        window.MiniVue = {
+            createApp,
+            reactive,
+            h
+        };
+    </script>
+
+    <!-- 使用示例 -->
+    <script>
+        MiniVue.createApp({
+            data() {
+                return {
+                    message: 'Hello Mini Vue!',
+                    count: 0
+                };
+            },
+            // 使用 template (会被编译器转换)
+            template: `
+                <div>
+                    <h1>{{ message }}</h1>
+                    <p>当前计数: {{ count }}</p>
+                    <button>点击我</button>
+                </div>
+            `,
+            // 注意：由于编译器简化，事件绑定需要使用 render 函数
+            render(ctx) {
+                return h('div', null, [
+                    h('h1', null, ctx.message),
+                    h('p', null, `当前计数: ${ctx.count}`),
+                    h('button', {
+                        onclick: () => { ctx.count++ }
+                    }, '点击我')
+                ]);
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
