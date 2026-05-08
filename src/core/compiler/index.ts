@@ -6,6 +6,7 @@ export function compile(template: string) {
   const tokens = tokenize(template);
   const ast = parse(tokens);
   const code = generate(ast);
+  console.log("🚀 ~ compile ~ code:", code)
   
   return code;
 }

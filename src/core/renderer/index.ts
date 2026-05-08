@@ -1,5 +1,6 @@
 import { createRenderer } from "./render";
 import { Component } from "./types";
+import { Fragment } from "./h";
 
 const { render, createVNode } = createRenderer();
 
@@ -15,6 +16,7 @@ export function createApp(rootComponent: Component) {
             }
 
             const vnode = createVNode(rootComponent);
+            console.log("🚀 ~ createApp ~ vnode:", vnode)
             render(vnode, containerElement as HTMLElement);
         },
         use(plugin: any) {
@@ -28,3 +30,6 @@ export function createApp(rootComponent: Component) {
     }
     return app;
 }
+
+// 导出 Fragment
+export { Fragment }

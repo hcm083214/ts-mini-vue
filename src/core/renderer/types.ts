@@ -28,9 +28,12 @@ export interface ComponentInstance {
     subTree: VNode | null
 }
 
+// Fragment 类型标识符
+export const Fragment = Symbol('Fragment')
+
 // 虚拟 DOM 节点类型
 export interface VNode {
-    type: string | Function | Component  // 支持字符串标签、组件函数或组件对象
+    type: string | Function | Component | symbol  // 支持字符串标签、组件函数、组件对象或 Fragment
     props?: VNodeProps
     children?: VNode[] | string
     el: HTMLElement   // 支持 SVG 元素

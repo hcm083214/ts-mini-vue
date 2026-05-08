@@ -1,4 +1,4 @@
-import { VNode, VNodeProps } from "./types";
+import { VNode, VNodeProps, Fragment } from "./types";
 
 /**
  * 创建虚拟节点 (Create Virtual Node)
@@ -8,7 +8,7 @@ import { VNode, VNodeProps } from "./types";
  * @param children 子节点
  */
 export function createVNode(
-  type: string | Function | object,
+  type: string | Function | object | symbol,
   props?: VNodeProps | null,
   children?: VNode[] | string | null
 ): VNode {
@@ -82,3 +82,6 @@ export function toDisplayString(val: any): string {
 function isVNode(val: any): val is VNode {
   return val && val.type !== undefined;
 }
+
+// 导出 Fragment
+export { Fragment }

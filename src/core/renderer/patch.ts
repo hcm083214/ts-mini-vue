@@ -1,7 +1,5 @@
-import { mountElement, unmounted } from "./mounter";
-import { VNode, Component, ComponentInstance } from "./types";
-import { createVNode, toDisplayString } from "./h";
-import { compile } from "../compiler/index";
+import { VNode, Fragment } from "./types";
+import { mountElement, unmounted ,mountComponent, updateComponent, mountFragment } from "./mounter";
 
 /**
  * 更新虚拟 DOM - 基于 Vue 3 源码及《Vue.js 设计与实现》简化实现
@@ -18,7 +16,16 @@ export function patch(n1: VNode | null, n2: VNode, container: HTMLElement): void
 
     const { type } = n2;
 
-    if (typeof type === "string") {
+    if (type === Fragment) {
+        // 片段节点（Fragment），处理子节点数组
+        if (!n1) {
+            // 挂载片段
+            mountFragment(n2, container);
+        } else {
+            // 更新片段
+            patchFragment(n1, n2, container);
+        }
+    } else if (typeof type === "string") {
         // 普通 HTML 元素
         if (!n1) {
             mountElement(n2, container);
@@ -29,12 +36,38 @@ export function patch(n1: VNode | null, n2: VNode, container: HTMLElement): void
     } else if (typeof type === "object" && type !== null) {
         // 组件节点
         if (!n1) {
+            console.log("🚀 ~ patch ~ n1:", n1)
+
             // 挂载组件
             mountComponent(n2, container);
         } else {
             // 更新组件
             updateComponent(n1, n2);
         }
+    }
+}
+
+
+
+/**
+ * 更新片段节点
+ * @param n1 旧片段虚拟节点
+ * @param n2 新片段虚拟节点
+ * @param container 容器元素
+ */
+function patchFragment(n1: VNode, n2: VNode, container: HTMLElement): void {
+    const c1 = n1.children as VNode[];
+    const c2 = n2.children as VNode[];
+
+    if (Array.isArray(c1) && Array.isArray(c2)) {
+        // 简化实现：使用 patchKeyedChildren 进行 diff
+        patchKeyedChildren(c1, c2, container);
+    } else if (Array.isArray(c2)) {
+        // 旧的不是数组，新的是数组，清空后重新挂载
+        container.innerHTML = '';
+        c2.forEach(child => {
+            patch(null, child, container);
+        });
     }
 }
 
@@ -78,7 +111,7 @@ function patchProps(el: HTMLElement, prevProps: Record<string, any>, nextProps: 
     for (const key in nextProps) {
         const prevValue = prevProps[key];
         const nextValue = nextProps[key];
-        
+
         if (prevValue !== nextValue) {
             // 更新属性
             if (key === 'class') {
@@ -156,148 +189,218 @@ function patchChildren(n1: VNode, n2: VNode, container: HTMLElement): void {
 }
 
 /**
- * 挂载组件
- * @param vnode 组件虚拟节点
+ * 带 key 的子节点 diff 算法
+ * 参照 Vue 3 源码的双端比较算法简化实现
+ * @param c1 旧子节点数组
+ * @param c2 新子节点数组
  * @param container 容器元素
  */
-function mountComponent(vnode: VNode, container: HTMLElement): void {
-    const component = vnode.type as Component;
-    
-    // 创建组件实例
-    const instance: ComponentInstance = {
-        vnode,
-        props: resolveProps(component, vnode.props || {}),
-        setupState: {},
-        render: null as any,  // 初始为 null，稍后设置
-        isMounted: false,
-        subTree: null
-    };
+function patchKeyedChildren(
+    c1: VNode[],
+    c2: VNode[],
+    container: HTMLElement
+): void {
+    let i = 0;
+    const l2 = c2.length;
+    let e1 = c1.length - 1; // 旧子节点末尾索引
+    let e2 = l2 - 1; // 新子节点末尾索引
 
-    // 存储实例到 vnode
-    vnode.component = instance;
+    // 1. 从头部开始同步
+    while (i <= e1 && i <= e2) {
+        const n1 = c1[i];
+        const n2 = c2[i];
 
-    // 执行 setup 函数
-    if (component.setup) {
-        const setupContext = {
-            emit: (event: string, ...args: any[]) => {
-                console.log(`[emit] ${event}`, args);
+        if (isSameVNodeType(n1, n2)) {
+            patch(n1, n2, container);
+        } else {
+            break;
+        }
+        i++;
+    }
+
+    // 2. 从尾部开始同步
+    while (i <= e1 && i <= e2) {
+        const n1 = c1[e1];
+        const n2 = c2[e2];
+
+        if (isSameVNodeType(n1, n2)) {
+            patch(n1, n2, container);
+        } else {
+            break;
+        }
+        e1--;
+        e2--;
+    }
+
+    // 3. 旧子节点已遍历完，新子节点还有剩余，需要挂载新节点
+    if (i > e1) {
+        if (i <= e2) {
+            const nextPos = e2 + 1;
+            const anchor = nextPos < l2 ? c2[nextPos].el : null;
+
+            while (i <= e2) {
+                patch(null, c2[i], container);
+                i++;
             }
-        };
-        
-        const setupResult = component.setup(instance.props, setupContext);
-        
-        if (typeof setupResult === 'function') {
-            // setup 返回渲染函数
-            instance.render = setupResult as () => VNode | null;
-        } else if (setupResult && typeof setupResult === 'object') {
-            // setup 返回状态对象
-            instance.setupState = setupResult;
         }
     }
-
-    // 如果有 template 但没有 render 函数，需要编译模板
-    if (!instance.render && component.template) {
-        try {
-            // 编译模板为渲染函数字符串
-            const renderCode = compile(component.template);
-            
-            // 编译后的代码格式是: "return function render() { ... }"
-            // 我们需要提取函数体，然后在新的上下文中执行
-            
-            // 提取函数体（使用更宽松的正则）
-            const match = renderCode.match(/return\s+function\s+render\s*\(\)\s*\{([\s\S]*)\}\s*$/);
-            
-            if (!match) {
-                throw new Error('Failed to parse render function');
-            }
-            
-            const functionBody = match[1].trim();
-            
-            // 创建一个包装函数，将 setupState 的属性作为局部变量
-            const setupKeys = Object.keys(instance.setupState);
-            
-            // 构建函数参数
-            const params = ['h', 'toDisplayString', ...setupKeys];
-            
-            // 创建渲染函数，直接返回渲染结果
-            // functionBody 应该是 "return h(...)" 这样的形式
-            const wrappedCode = `${functionBody}`;
-            
-            try {
-                // 创建渲染函数生成器
-                const renderFn = new Function(...params, wrappedCode);
-                
-                // 创建一个包装的 render 函数，每次调用时重新执行
-                instance.render = function() {
-                    // 重新获取最新的 setupValues
-                    const currentSetupValues = setupKeys.map(key => (instance.setupState as any)[key]);
-                    return renderFn(createVNode, toDisplayString, ...currentSetupValues);
-                };
-            } catch (creationError) {
-                throw creationError;
-            }
-        } catch (error) {
-            console.error('Template compilation error:', error);
-            console.error('Template:', component.template);
+    // 4. 新子节点已遍历完，旧子节点还有剩余，需要卸载旧节点
+    else if (i > e2) {
+        while (i <= e1) {
+            unmounted(c1[i].el);
+            i++;
         }
     }
-    
-    // 如果还是没有 render 函数，尝试使用 component.render
-    if (!instance.render && component.render) {
-        instance.render = component.render;
-    }
+    // 5. 中间部分需要 diff
+    else {
+        const s1 = i; // 旧子节点起始索引
+        const s2 = i; // 新子节点起始索引
 
-    // 执行渲染函数获取子树
-    if (instance.render) {
-        try {
-            // 在渲染时，将 setupState 中的变量注入到作用域
-            const subTree = instance.render();
-            
-            instance.subTree = subTree;
-            
-            // 递归 patch 子树
-            if (subTree) {
-                patch(null, subTree, container);
+        // 构建新子节点的 key -> index 映射
+        const keyToNewIndexMap: Map<string | number, number> = new Map();
+        for (let i = s2; i <= e2; i++) {
+            const child = c2[i];
+            if (child.key != null) {
+                keyToNewIndexMap.set(child.key, i);
             }
-            
-            // 标记为已挂载
-            instance.isMounted = true;
-        } catch (error) {
-            console.error('Render error:', error);
+        }
+
+        // 遍历旧子节点，尝试在新子节点中找到对应节点进行 patch
+        let patched = 0;
+        const toBePatched = e2 - s2 + 1; // 需要 patch 的新节点数量
+        let moved = false;
+        let maxNewIndexSoFar = 0;
+
+        // 用于记录新索引到旧索引的映射，后续用于判断是否需要移动
+        const newIndexToOldIndexMap = new Array(toBePatched).fill(0);
+
+        for (let i = s1; i <= e1; i++) {
+            const prevChild = c1[i];
+
+            if (patched >= toBePatched) {
+                // 所有新节点都已 patch，剩余的旧节点需要卸载
+                unmounted(prevChild.el);
+                continue;
+            }
+
+            let newIndex: number | undefined;
+
+            if (prevChild.key != null) {
+                // 有 key，通过 key 查找
+                newIndex = keyToNewIndexMap.get(prevChild.key);
+            } else {
+                // 没有 key，遍历新子节点查找相同类型的节点
+                for (let j = s2; j <= e2; j++) {
+                    if (newIndexToOldIndexMap[j - s2] === 0 && isSameVNodeType(prevChild, c2[j])) {
+                        newIndex = j;
+                        break;
+                    }
+                }
+            }
+
+            if (newIndex === undefined) {
+                // 找不到对应节点，卸载旧节点
+                unmounted(prevChild.el);
+            } else {
+                // 找到对应节点，更新映射关系
+                newIndexToOldIndexMap[newIndex - s2] = i + 1; // +1 因为 0 表示未设置
+
+                if (newIndex >= maxNewIndexSoFar) {
+                    maxNewIndexSoFar = newIndex;
+                } else {
+                    moved = true;
+                }
+
+                // patch 节点
+                patch(prevChild, c2[newIndex], container);
+                patched++;
+            }
+        }
+
+        // 处理新增和移动的节点
+        const increasingNewIndexSequence = moved
+            ? getSequence(newIndexToOldIndexMap)
+            : [];
+        let j = increasingNewIndexSequence.length - 1;
+
+        // 从后往前遍历，方便插入节点
+        for (let i = toBePatched - 1; i >= 0; i--) {
+            const nextIndex = s2 + i;
+            const nextChild = c2[nextIndex];
+
+            if (newIndexToOldIndexMap[i] === 0) {
+                // 新节点，需要挂载
+                patch(null, nextChild, container);
+            } else if (moved) {
+                // 需要移动的节点
+                // 简化实现：先卸载再重新挂载
+                // 实际 Vue 3 中使用 insertBefore 进行移动
+                if (j < 0 || i !== increasingNewIndexSequence[j]) {
+                    // 节点需要移动
+                    // 这里简化处理，实际应该使用 DOM 操作方法移动节点
+                } else {
+                    j--;
+                }
+            }
         }
     }
 }
 
 /**
- * 更新组件
- * @param n1 旧虚拟节点
- * @param n2 新虚拟节点
+ * 判断两个 VNode 是否是相同类型
+ * @param n1 第一个节点
+ * @param n2 第二个节点
  */
-function updateComponent(n1: VNode, n2: VNode): void {
-    const instance = (n2.component = n1.component) as ComponentInstance;
-    
-    // 更新 props
-    instance.props = resolveProps(n2.type as Component, n2.props || {});
-    
-    // 触发重新渲染（简化实现）
-    // 在实际 Vue 中，这里会通过响应式系统自动触发更新
-    if (instance.render && instance.isMounted && instance.subTree) {
-        const subTree = instance.render.call(instance.setupState);
-        const parent = instance.subTree.el?.parentNode as HTMLElement;
-        if (parent && subTree) {
-            patch(instance.subTree, subTree, parent);
-        }
-        instance.subTree = subTree;
-    }
+function isSameVNodeType(n1: VNode, n2: VNode): boolean {
+    return n1.type === n2.type && n1.key === n2.key;
 }
 
 /**
- * 解析组件 props
- * @param component 组件定义
- * @param rawProps 原始属性
+ * 获取最长递增子序列
+ * 用于优化节点移动操作
+ * @param arr 输入数组
+ * @returns 最长递增子序列的索引数组
  */
-function resolveProps(component: Component, rawProps: Record<string, any>): Record<string, any> {
-    // 简化实现：直接返回所有属性
-    // 在实际 Vue 中，需要根据 component.props 定义进行过滤和转换
-    return { ...rawProps };
+function getSequence(arr: number[]): number[] {
+    const p = arr.slice();
+    const result = [0];
+    let i, j, u, v, c;
+    const len = arr.length;
+
+    for (i = 0; i < len; i++) {
+        const arrI = arr[i];
+        if (arrI !== 0) {
+            j = result[result.length - 1];
+            if (arr[j] < arrI) {
+                p[i] = j;
+                result.push(i);
+                continue;
+            }
+            u = 0;
+            v = result.length - 1;
+            while (u < v) {
+                c = (u + v) >> 1;
+                if (arr[result[c]] < arrI) {
+                    u = c + 1;
+                } else {
+                    v = c;
+                }
+            }
+            if (arrI < arr[result[u]]) {
+                if (u > 0) {
+                    p[i] = result[u - 1];
+                }
+                result[u] = i;
+            }
+        }
+    }
+
+    u = result.length;
+    v = result[u - 1];
+    while (u-- > 0) {
+        result[u] = v;
+        v = p[v];
+    }
+
+    return result;
 }
