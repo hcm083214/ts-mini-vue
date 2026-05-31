@@ -2,11 +2,13 @@
 export { 
     reactive, 
     ref, 
+    isRef,
     computed, 
     watchEffect, 
     onMounted, 
     onUnmounted, 
     triggerMounted, 
     triggerUnmounted,
-    type ReactiveEffect
+    ReactiveEffect,
+    type ReactiveEffect as ReactiveEffectType
 } from './reactive'

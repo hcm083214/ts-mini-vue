@@ -100,7 +100,7 @@ interface Ref<T> {
   __v_isRef?: boolean;  // Ref 标识符
 }
 
-function ref<T>(val: T): Ref<T> {
+export function ref<T>(val: T): Ref<T> {
   const refObj = reactive({ value: val }) as Ref<T>;
   // 添加 Ref 标识符，用于判断是否为 Ref 对象
   Object.defineProperty(refObj, '__v_isRef', {
@@ -109,6 +109,13 @@ function ref<T>(val: T): Ref<T> {
     writable: false
   });
   return refObj;
+}
+
+/**
+ * 判断一个值是否是 Ref 对象
+ */
+export function isRef(value: any): value is Ref<any> {
+  return value && typeof value === 'object' && '__v_isRef' in value
 }
 
 // 创建 Computed
@@ -136,33 +143,29 @@ function watchEffect(fn: () => void) {
 const onMountedCallbacks: (() => void)[] = []
 const onUnmountedCallbacks: (() => void)[] = []
 
-function onMounted(fn: () => void) {
+export function onMounted(fn: () => void) {
   onMountedCallbacks.push(fn)
   setTimeout(fn, 0)
 }
 
-function onUnmounted(fn: () => void) {
+export function onUnmounted(fn: () => void) {
   onUnmountedCallbacks.push(fn)
 }
 
-function triggerMounted() {
+export function triggerMounted() {
   onMountedCallbacks.forEach(cb => cb())
   onMountedCallbacks.length = 0
 }
 
-function triggerUnmounted() {
+export function triggerUnmounted() {
   onUnmountedCallbacks.forEach(cb => cb())
   onUnmountedCallbacks.length = 0
 }
 
+// 导出所有响应式 API（除了已单独导出的函数）
 export { 
   reactive, 
-  ref, 
   computed, 
-  watchEffect, 
-  onMounted, 
-  onUnmounted, 
-  triggerMounted, 
-  triggerUnmounted,
+  watchEffect,
   ReactiveEffect
 }

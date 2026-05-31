@@ -3,6 +3,8 @@ import { VNode, ComponentInstance, VNodeProps, Fragment } from './vnode'
 import { createVNode, toDisplayString } from './h'
 import { compile } from '../compiler/index'
 import { patch } from '../runtime-dom/patch'
+import { ReactiveEffect } from '../reactivity/index'
+import { isRef } from '../reactivity/reactive'
 
 /**
  * 组件上下文类型
@@ -34,34 +36,30 @@ export function resolveProps(component: Component, rawProps: Record<string, any>
     return { ...rawProps }
 }
 
-/**
- * 判断一个值是否是 Ref 对象
- */
-function isRef(value: any): boolean {
-    return value && typeof value === 'object' && '__v_isRef' in value
-}
 
 /**
- * 解包 Ref 对象
+ * 创建公共实例代理，用于模板中访问 setupState 时自动解包 ref
  */
-function unwrapRef(value: any): any {
-    if (isRef(value)) {
-        return value.value
-    }
-    return value
-}
-
-/**
- * 处理 setup 返回值，解包其中的 Ref
- */
-export function unwrapSetupResult(setupResult: Record<string, any>): Record<string, any> {
-    const unwrapped: Record<string, any> = {}
-    
-    for (const key in setupResult) {
-        unwrapped[key] = unwrapRef(setupResult[key])
-    }
-    
-    return unwrapped
+function createSetupContextProxy(instance: ComponentInstance): any {
+    return new Proxy(instance.setupState, {
+        get(target, key: string, receiver) {
+            const result = Reflect.get(target, key, receiver)
+            // 如果是 ref，自动解包
+            if (isRef(result)) {
+                return result.value
+            }
+            return result
+        },
+        set(target, key: string, value, receiver) {
+            const oldValue = target[key]
+            if (isRef(oldValue)) {
+                // 如果旧值是 ref，设置其 value
+                oldValue.value = value
+                return true
+            }
+            return Reflect.set(target, key, value, receiver)
+        }
+    })
 }
 
 /**
@@ -77,7 +75,8 @@ export function mountComponent(vnode: VNode, container: HTMLElement): void {
         setupState: {},
         render: null,  // 初始为 null，稍后设置
         isMounted: false,
-        subTree: null
+        subTree: null,
+        update: null  // 添加 update effect
     }
 
     // 存储实例到 vnode
@@ -97,8 +96,8 @@ export function mountComponent(vnode: VNode, container: HTMLElement): void {
             // setup 返回渲染函数
             instance.render = setupResult as () => VNode | null
         } else if (setupResult && typeof setupResult === 'object') {
-            // setup 返回状态对象，需要解包其中的 Ref
-            instance.setupState = unwrapSetupResult(setupResult)
+            // setup 返回状态对象，保持 ref 原样
+            instance.setupState = setupResult
         }
     }
 
@@ -127,9 +126,12 @@ export function mountComponent(vnode: VNode, container: HTMLElement): void {
             // 创建渲染函数
             const renderFn = new Function('h', 'toDisplayString', wrappedCode)
             
+            // 创建公共实例代理
+            const publicThis = createSetupContextProxy(instance)
+            
             // 创建包装的 render 函数
             instance.render = function() {
-                return renderFn.call(instance.setupState, createVNode, toDisplayString)
+                return renderFn.call(publicThis, createVNode, toDisplayString)
             }
         } catch (error) {
             console.error('Template compilation error:', error)
@@ -142,29 +144,60 @@ export function mountComponent(vnode: VNode, container: HTMLElement): void {
         instance.render = component.render
     }
 
-    // 执行渲染函数获取子树
-    if (instance.render) {
-        try {
-            let subTree = instance.render()
-            
-            // 如果 render 返回的是数组，需要包装成 Fragment
-            if (Array.isArray(subTree)) {
-                subTree = createVNode(Fragment, null, subTree)
+    // 创建更新 effect
+    const effect = new ReactiveEffect(() => {
+        if (!instance.isMounted) {
+            // 首次挂载
+            if (instance.render) {
+                try {
+                    let subTree = instance.render()
+                    
+                    // 如果 render 返回的是数组，需要包装成 Fragment
+                    if (Array.isArray(subTree)) {
+                        subTree = createVNode(Fragment, null, subTree)
+                    }
+                    
+                    instance.subTree = subTree
+                    
+                    // 递归 patch 子树
+                    if (subTree) {
+                        patch(null, subTree, container)
+                    }
+                    
+                    // 标记为已挂载
+                    instance.isMounted = true
+                } catch (error) {
+                    console.error('Render error:', error)
+                }
             }
-            
-            instance.subTree = subTree
-            
-            // 递归 patch 子树
-            if (subTree) {
-                patch(null, subTree, container)
+        } else {
+            // 更新组件
+            if (instance.render && instance.subTree) {
+                try {
+                    let subTree = instance.render()
+                    
+                    // 如果 render 返回的是数组，需要包装成 Fragment
+                    if (Array.isArray(subTree)) {
+                        subTree = createVNode(Fragment, null, subTree)
+                    }
+                    
+                    const parent = instance.subTree.el?.parentNode as HTMLElement
+                    if (parent && subTree) {
+                        patch(instance.subTree, subTree, parent)
+                    }
+                    instance.subTree = subTree
+                } catch (error) {
+                    console.error('Update error:', error)
+                }
             }
-            
-            // 标记为已挂载
-            instance.isMounted = true
-        } catch (error) {
-            console.error('Render error:', error)
         }
-    }
+    })
+    
+    // 存储 effect 到实例
+    instance.update = effect
+    
+    // 执行 effect（会触发首次渲染并收集依赖）
+    effect.run()
 }
 
 /**
@@ -176,19 +209,8 @@ export function updateComponent(n1: VNode, n2: VNode): void {
     // 更新 props
     instance.props = resolveProps(n2.type as Component, n2.props || {})
     
-    // 触发重新渲染
-    if (instance.render && instance.isMounted && instance.subTree) {
-        let subTree = instance.render()
-        
-        // 如果 render 返回的是数组，需要包装成 Fragment
-        if (Array.isArray(subTree)) {
-            subTree = createVNode(Fragment, null, subTree)
-        }
-        
-        const parent = instance.subTree.el?.parentNode as HTMLElement
-        if (parent && subTree) {
-            patch(instance.subTree, subTree, parent)
-        }
-        instance.subTree = subTree
+    // 触发重新渲染（通过 effect）
+    if (instance.update) {
+        instance.update.run()
     }
 }

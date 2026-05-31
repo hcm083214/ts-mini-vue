@@ -1,5 +1,6 @@
 // runtime-core/vnode.ts - VNode 类型定义和工具函数
 import { Component } from './component'
+import { ReactiveEffect } from '../reactivity/reactive'
 
 // Fragment 类型标识符
 export const Fragment = Symbol('Fragment')
@@ -15,6 +16,7 @@ export interface ComponentInstance {
     render: (() => VNode | null) | null
     isMounted: boolean
     subTree: VNode | null
+    update: ReactiveEffect | null  // 组件的更新 effect
 }
 
 // 虚拟 DOM 节点类型

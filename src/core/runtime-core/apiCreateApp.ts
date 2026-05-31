@@ -2,7 +2,7 @@
 import { Component } from './component'
 import { createVNode } from './h'
 import { createRenderer } from './renderer'
-import { watchEffect } from '../reactivity/reactive'
+import { watchEffect } from '../reactivity/index'
 
 const { render } = createRenderer()
 
