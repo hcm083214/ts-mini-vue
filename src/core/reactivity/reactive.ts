@@ -97,10 +97,18 @@ function reactive<T extends object>(obj: T): T {
 // 创建 Ref
 interface Ref<T> {
   value: T;
+  __v_isRef?: boolean;  // Ref 标识符
 }
 
 function ref<T>(val: T): Ref<T> {
-  return reactive({ value: val }) as Ref<T>;
+  const refObj = reactive({ value: val }) as Ref<T>;
+  // 添加 Ref 标识符，用于判断是否为 Ref 对象
+  Object.defineProperty(refObj, '__v_isRef', {
+    value: true,
+    enumerable: false,  // 不可枚举，避免被遍历到
+    writable: false
+  });
+  return refObj;
 }
 
 // 创建 Computed

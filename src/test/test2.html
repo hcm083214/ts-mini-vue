@@ -9,17 +9,22 @@
 
 <body>
     <script src="./vue.global.js"></script>
-    <div id="app">{{message}}</div>
+    <div id="app"></div>
     <script>
-        const { createApp } = Vue
-        debugger
-        createApp({
-            data() {
-                return {
-                    message: 'Hello Vue 3!'
-                }
+        const { createApp, ref } = Vue
+        const comp = {
+            template: `        
+            <div>
+                <p @click="count++">{{count}}</p>
+                <p>{{message}}</p>
+            </div>`,
+            setup() {
+                const count = ref(0)
+                const message = ref('组件')
+                return { message, count }
             }
-        }).mount('#app')
+        }
+        createApp(comp).mount('#app')
     </script>
 </body>
 

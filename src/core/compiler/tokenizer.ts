@@ -17,8 +17,12 @@ export interface Token {
 export function tokenize(template: string): Token[] {
   const tokens: Token[] = [];
   let i = 0;
+  console.log('[Tokenizer] Starting tokenization, template length:', template.length);
+  
   while (i < template.length) {
     const char = template[i];
+    // console.log(`[Tokenizer] Position ${i}, char: '${char}'`);
+    
     if (char === '<') {
       // 检测注释 <!-- -->
       if (template.slice(i, i + 4) === '<!--') {
@@ -67,16 +71,27 @@ export function tokenize(template: string): Token[] {
       const match = template.slice(i).match(/^\{\{([^}]+)\}\}/);
       if (match) {
         const trimmedValue = match[1].trim();
+        console.log(`[Tokenizer] Found interpolation at position ${i}: '${trimmedValue}'`);
         tokens.push({ type: 'INTERPOLATION', value: trimmedValue });
         i += match[0].length;
+      } else {
+        // 如果插值表达式匹配失败，将当前字符作为普通文本
+        console.log(`[Tokenizer] Interpolation match failed at position ${i}, treating as text`);
+        tokens.push({ type: 'TEXT', value: char });
+        i++;
       }
     } else {
       const match = template.slice(i).match(/^[^{<]+/);
       if (match) {
         tokens.push({ type: 'TEXT', value: match[0] });
         i += match[0].length;
+      } else {
+        // 如果匹配失败，推进一个字符以避免死循环
+        i++;
       }
     }
   }
+  
+  console.log('[Tokenizer] Generated tokens:', tokens.map(t => ({ type: t.type, value: t.value.substring(0, 50) })));
   return tokens;
 }

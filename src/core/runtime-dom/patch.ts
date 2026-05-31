@@ -1,5 +1,6 @@
-import { VNode, Fragment } from "./types";
-import { mountElement, unmounted ,mountComponent, updateComponent, mountFragment } from "./mounter";
+import { VNode, Fragment } from "../runtime-core/vnode"
+import { mountElement, unmounted, mountFragment, patchProp } from "./nodeOps"
+import { mountComponent, updateComponent } from "../runtime-core/component"
 
 /**
  * 更新虚拟 DOM - 基于 Vue 3 源码及《Vue.js 设计与实现》简化实现
@@ -37,7 +38,6 @@ export function patch(n1: VNode | null, n2: VNode, container: HTMLElement): void
         // 组件节点
         if (!n1) {
             console.log("🚀 ~ patch ~ n1:", n1)
-
             // 挂载组件
             mountComponent(n2, container);
         } else {
@@ -96,45 +96,19 @@ function patchProps(el: HTMLElement, prevProps: Record<string, any>, nextProps: 
     // 移除旧属性中不再存在的属性
     for (const key in prevProps) {
         if (!(key in nextProps)) {
-            // 移除属性
-            if (key === 'class') {
-                el.className = '';
-            } else if (key === 'style') {
-                el.style.cssText = '';
-            } else {
-                el.removeAttribute(key);
-            }
+            // 调用 patchProp 传入 null 作为新值来移除
+            patchProp(el, key, prevProps[key], null)
         }
     }
 
     // 设置新属性
     for (const key in nextProps) {
-        const prevValue = prevProps[key];
-        const nextValue = nextProps[key];
+        const prevValue = prevProps[key]
+        const nextValue = nextProps[key]
 
         if (prevValue !== nextValue) {
-            // 更新属性
-            if (key === 'class') {
-                el.className = nextValue || '';
-            } else if (key === 'style') {
-                el.style.cssText = nextValue || '';
-            } else if (key.startsWith('on')) {
-                // 事件处理
-                const eventName = key.slice(2).toLowerCase();
-                if (prevValue) {
-                    el.removeEventListener(eventName, prevValue);
-                }
-                if (nextValue) {
-                    el.addEventListener(eventName, nextValue);
-                }
-            } else {
-                // 普通属性或特性
-                try {
-                    (el as any)[key] = nextValue;
-                } catch {
-                    el.setAttribute(key, nextValue);
-                }
-            }
+            // 调用统一的 patchProp 函数
+            patchProp(el, key, prevValue, nextValue)
         }
     }
 }

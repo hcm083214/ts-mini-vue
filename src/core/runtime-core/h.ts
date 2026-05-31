@@ -1,4 +1,5 @@
-import { VNode, VNodeProps, Fragment } from "./types";
+// runtime-core/h.ts - h 函数和 createVNode
+import { VNode, VNodeProps, Fragment, isVNode } from './vnode'
 
 /**
  * 创建虚拟节点 (Create Virtual Node)
@@ -74,13 +75,6 @@ export function toDisplayString(val: any): string {
     return JSON.stringify(val);
   }
   return String(val);
-}
-
-/**
- * 判断是否为 VNode
- */
-function isVNode(val: any): val is VNode {
-  return val && val.type !== undefined;
 }
 
 // 导出 Fragment

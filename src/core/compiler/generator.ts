@@ -176,6 +176,7 @@ function genProps(node: ASTElement, context: CodegenContext) {
         // 事件绑定（如 @click）
         // 去掉 @ 前缀，值作为事件处理函数名
         const eventName = key.slice(1)
+        // 关键修复：事件处理函数的值应该是表达式，直接引用变量
         context.push(`"on${eventName.charAt(0).toUpperCase()}${eventName.slice(1)}": ${value}`)
       } else {
         // 静态属性
