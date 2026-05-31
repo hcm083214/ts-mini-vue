@@ -99,6 +99,11 @@ export function mountFragment(vnode: VNode, container: HTMLElement): void {
         children.forEach(child => {
             patch(null, child, container)
         })
+        
+        // Fragment 的 el 指向第一个子节点的 el
+        if (children.length > 0 && children[0]) {
+            vnode.el = children[0].el
+        }
     }
 }
 

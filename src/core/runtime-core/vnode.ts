@@ -17,6 +17,7 @@ export interface ComponentInstance {
     isMounted: boolean
     subTree: VNode | null
     update: ReactiveEffect | null  // 组件的更新 effect
+    container?: HTMLElement  // 保存挂载的容器引用
 }
 
 // 虚拟 DOM 节点类型

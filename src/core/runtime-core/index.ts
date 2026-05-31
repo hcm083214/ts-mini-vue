@@ -8,7 +8,6 @@ export {
     mountComponent, 
     updateComponent,
     resolveProps,
-    unwrapSetupResult
 } from './component'
 export { createRenderer } from './renderer'
 export { createApp } from './apiCreateApp'

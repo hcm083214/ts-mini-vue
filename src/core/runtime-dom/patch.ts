@@ -69,6 +69,11 @@ function patchFragment(n1: VNode, n2: VNode, container: HTMLElement): void {
             patch(null, child, container);
         });
     }
+    
+    // 更新 Fragment 的 el 为第一个子节点的 el
+    if (c2 && c2.length > 0 && c2[0]) {
+        n2.el = c2[0].el;
+    }
 }
 
 /**
@@ -141,13 +146,27 @@ function patchChildren(n1: VNode, n2: VNode, container: HTMLElement): void {
             // 简化实现：清空旧节点，重新挂载新节点
             container.innerHTML = '';
             c2.forEach(child => {
-                patch(null, child, container);
+                if (typeof child === 'string') {
+                    // 字符串类型，创建文本节点
+                    const textNode = document.createTextNode(child);
+                    container.appendChild(textNode);
+                } else if (child !== null && child !== undefined) {
+                    // VNode 类型，递归 patch
+                    patch(null, child as VNode, container);
+                }
             });
         } else {
             // 旧子节点是文本或 null，清空后挂载新节点
             container.innerHTML = '';
             c2.forEach(child => {
-                patch(null, child, container);
+                if (typeof child === 'string') {
+                    // 字符串类型，创建文本节点
+                    const textNode = document.createTextNode(child);
+                    container.appendChild(textNode);
+                } else if (child !== null && child !== undefined) {
+                    // VNode 类型，递归 patch
+                    patch(null, child as VNode, container);
+                }
             });
         }
     } else {

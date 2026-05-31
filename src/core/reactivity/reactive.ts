@@ -16,6 +16,8 @@ class ReactiveEffect {
   }
 
   run() {
+    console.log('[ReactiveEffect.run] Starting effect run');
+    
     // 清理旧的依赖关系
     this.deps.forEach(dep => dep.delete(this));
     this.deps.length = 0;
@@ -23,23 +25,29 @@ class ReactiveEffect {
     try {
       activeEffect = this;
       shouldTrack = true;
+      console.log('[ReactiveEffect.run] activeEffect set, shouldTrack:', shouldTrack);
+      
       return this.fn();
     } finally {
       shouldTrack = false;
       activeEffect = undefined;
+      console.log('[ReactiveEffect.run] Effect run complete, cleaned up');
     }
   }
 
   effect() {
+    console.log('[ReactiveEffect.effect] Triggering effect');
     this.run();
   }
 }
 
 function track(target: TrackTarget, key: TrackKey) {
   if (!shouldTrack || !activeEffect) {
-    // console.log(`⏭️ [track] 跳过追踪: shouldTrack=${shouldTrack}, activeEffect=${!!activeEffect}`);
+    console.log(`⏭️ [track] 跳过追踪: shouldTrack=${shouldTrack}, activeEffect=${!!activeEffect}`);
     return;
   }
+  
+  console.log(`📍 [track] Tracking: target=${target}, key=${String(key)}`);
   
   let depsMap = targetMap.get(target);
   if (!depsMap) {
@@ -54,22 +62,30 @@ function track(target: TrackTarget, key: TrackKey) {
   if (!deps.has(activeEffect)) {
     deps.add(activeEffect);
     activeEffect.deps.push(deps);
+    console.log(`✅ [track] Dependency tracked successfully`);
+  } else {
+    console.log(`ℹ️ [track] Dependency already exists`);
   }
 }
 
 function trigger(target: TrackTarget, key: TrackKey) {
+  console.log(`🔔 [trigger] Triggering: target=${target}, key=${String(key)}`);
+  
   const depsMap = targetMap.get(target);
 
   if (!depsMap) {
+    console.warn(`[trigger] No depsMap found for target`);
     return;
   }
   
   const deps = depsMap.get(key);
 
   if (deps) {
+    console.log(`🚀 [trigger] Found ${deps.size} effects to run`);
     // 创建副本以防止无限循环或在迭代期间修改集合
     const effectsToRun = new Set(deps);
     effectsToRun.forEach(effectFn => {
+      console.log(`▶️ [trigger] Running effect`);
       effectFn.effect();
     });
   } else {

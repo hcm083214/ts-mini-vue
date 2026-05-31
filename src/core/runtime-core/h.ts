@@ -1,5 +1,6 @@
 // runtime-core/h.ts - h 函数和 createVNode
 import { VNode, VNodeProps, Fragment, isVNode } from './vnode'
+import { isRef } from '../reactivity/reactive'
 
 /**
  * 创建虚拟节点 (Create Virtual Node)
@@ -65,6 +66,11 @@ export function h(
  * @returns 安全的字符串表示
  */
 export function toDisplayString(val: any): string {
+  // 如果是 ref，自动解包
+  if (isRef(val)) {
+    val = val.value;
+  }
+  
   if (val == null) {
     return '';
   }
