@@ -37,7 +37,6 @@ export function patch(n1: VNode | null, n2: VNode, container: HTMLElement): void
     } else if (typeof type === "object" && type !== null) {
         // 组件节点
         if (!n1) {
-            console.log("🚀 ~ patch ~ n1:", n1)
             // 挂载组件
             mountComponent(n2, container);
         } else {

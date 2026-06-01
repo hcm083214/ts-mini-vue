@@ -62,7 +62,6 @@ export function mountComponent(vnode: VNode, container: HTMLElement): void {
     if (component.setup) {
         const setupContext: ComponentContext = {
             emit: (event: string, ...args: any[]) => {
-                console.log(`[emit] ${event}`, args)
             }
         }
         
@@ -102,9 +101,26 @@ export function mountComponent(vnode: VNode, container: HTMLElement): void {
             // 创建渲染函数
             const renderFn = new Function('h', 'toDisplayString', wrappedCode)
             
-            // 创建包装的 render 函数，直接使用 setupState 作为 this
+            // 关键修复：创建 Proxy 代理 setupState，自动解包 ref
+            // 参照 Vue 3 源码及《Vue.js 设计与实现》的实现
+            const setupStateProxy = new Proxy(instance.setupState, {
+                get(target, key, receiver) {
+                    const value = Reflect.get(target, key, receiver)
+                    // 如果值是 ref，自动解包（返回 .value）
+                    if (isRef(value)) {
+                        return value.value
+                    }
+                    return value
+                },
+                has(target, key) {
+                    // 确保 in 操作符能正确判断属性是否存在
+                    return key in target
+                }
+            })
+            
+            // 创建包装的 render 函数，使用 Proxy 代理后的 setupState 作为 this
             instance.render = function() {
-                return renderFn.call(instance.setupState, createVNode, toDisplayString)
+                return renderFn.call(setupStateProxy, createVNode, toDisplayString)
             }
         } catch (error) {
             console.error('Template compilation error:', error)
@@ -119,7 +135,6 @@ export function mountComponent(vnode: VNode, container: HTMLElement): void {
 
     // 创建更新 effect
     const effect = new ReactiveEffect(() => {
-        console.log('[Component.effect] Running effect, isMounted:', instance.isMounted);
         
         if (!instance.isMounted) {
             // 首次挂载
@@ -127,7 +142,6 @@ export function mountComponent(vnode: VNode, container: HTMLElement): void {
                 try {
                     let subTree = instance.render()
                     
-                    console.log('[Component.effect] First render, subTree:', JSON.stringify(subTree, null, 2));
                     
                     // 如果 render 返回的是数组，需要包装成 Fragment
                     if (Array.isArray(subTree)) {
@@ -143,7 +157,6 @@ export function mountComponent(vnode: VNode, container: HTMLElement): void {
                     
                     // 标记为已挂载
                     instance.isMounted = true
-                    console.log('[Component.effect] First mount complete');
                 } catch (error) {
                     console.error('Render error:', error)
                 }
@@ -152,28 +165,22 @@ export function mountComponent(vnode: VNode, container: HTMLElement): void {
             // 更新组件
             if (instance.render && instance.subTree && instance.container) {
                 try {
-                    console.log('[Component.effect] Updating component...');
-                    console.log('[Component.effect] Old subTree:', instance.subTree);
                     
                     let newSubTree = instance.render()
                     
-                    console.log('[Component.effect] New subTree:', JSON.stringify(newSubTree, null, 2));
                     
                     // 如果 render 返回的是数组，需要包装成 Fragment
                     if (Array.isArray(newSubTree)) {
                         newSubTree = createVNode(Fragment, null, newSubTree)
                     }
                     
-                    console.log('[Component.effect] Wrapped new subTree:', newSubTree);
                     
                     // 使用保存的 container 进行 patch
                     if (newSubTree) {
-                        console.log('[Component.effect] Patching from', instance.subTree, 'to', newSubTree, 'in container:', instance.container);
                         patch(instance.subTree, newSubTree, instance.container)
                         instance.subTree = newSubTree
                     }
                     
-                    console.log('[Component.effect] Update complete');
                 } catch (error) {
                     console.error('Update error:', error)
                 }
