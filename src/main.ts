@@ -3,9 +3,9 @@ import { createApp, h, reactive, ref } from "./core";
 const App = {
   template: `
   <div class="container">
-    <h1>{{ state.title }}</h1>
+    <h1 :id="state.title">{{ state.title }}</h1>
     <p>{{ state.message }}</p>
-    <button @click="increment">Click Me</button>
+    <button @click="increment" :disabled="count >= 2">Click Me</button>
     <p>Count: {{ count+1 }}</p>
   </div>
   `,

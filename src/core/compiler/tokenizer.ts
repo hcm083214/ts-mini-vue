@@ -46,24 +46,63 @@ export function tokenize(template: string): Token[] {
           i++;
         }
       } else {
-        // 使用 [\s\S] 替代 . 以匹配包括换行符在内的所有字符
         // 标签名支持字母、数字、下划线和连字符（用于自定义组件如 m-component）
-        const match = template.slice(i).match(/^<([a-zA-Z][\w-]*)([\s\S]*?)(\/?)>/);
-        if (match) {
-          const tagName = match[1]; // 直接从捕获组获取标签名
-          const attrsStr = match[2] || ''; // 属性字符串（可能为空，包含换行符）
-          const isSelfClosing = match[3] === '/'; // 检测是否是自闭合标签
+        // 需要正确处理属性值中包含 > 的情况（如 :disabled="count >= 2"）
+        // 策略：先找到标签名，然后逐字符解析直到找到真正的结束 >
+        
+        const tagMatch = template.slice(i).match(/^<([a-zA-Z][\w-]*)/);
+        if (!tagMatch) {
+          i++;
+          continue;
+        }
+        
+        const tagName = tagMatch[1];
+        let pos = i + tagMatch[0].length; // 跳过 <tagName
+        
+        // 逐字符查找真正的结束 >，需要考虑引号内的内容
+        let inQuote = false;
+        let quoteChar = '';
+        let isSelfClosing = false;
+        
+        while (pos < template.length) {
+          const char = template[pos];
           
-          const { props, directives } = parseProps(attrsStr);
-          tokens.push({ type: 'TAG_START', value: tagName, props, directives });
-          
-          // 🔥 关键修复：如果是自闭合标签，立即添加 TAG_END token
-          if (isSelfClosing) {
-            tokens.push({ type: 'TAG_END', value: tagName });
+          if (inQuote) {
+            // 在引号内，只有遇到相同的引号才退出
+            if (char === quoteChar) {
+              inQuote = false;
+            }
+          } else {
+            // 不在引号内
+            if (char === '"' || char === "'") {
+              inQuote = true;
+              quoteChar = char;
+            } else if (char === '>') {
+              // 找到结束标签
+              break;
+            } else if (char === '/' && template[pos + 1] === '>') {
+              // 自闭合标签 />
+              isSelfClosing = true;
+              pos++; // 跳过 /
+              break;
+            }
           }
           
-          i += match[0].length;
+          pos++;
         }
+        
+        // 提取属性字符串
+        const attrsStr = template.slice(i + tagMatch[0].length, pos).trim();
+        
+        const { props, directives } = parseProps(attrsStr);
+        tokens.push({ type: 'TAG_START', value: tagName, props, directives });
+        
+        // 🔥 关键修复：如果是自闭合标签，立即添加 TAG_END token
+        if (isSelfClosing) {
+          tokens.push({ type: 'TAG_END', value: tagName });
+        }
+        
+        i = pos + 1; // 跳过 >
       }
     } else if (char === '{') {
       const match = template.slice(i).match(/^\{\{([^}]+)\}\}/);

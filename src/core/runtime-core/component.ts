@@ -100,6 +100,7 @@ export function mountComponent(vnode: VNode, container: HTMLElement): void {
             
             // 创建渲染函数
             const renderFn = new Function('h', 'toDisplayString', wrappedCode)
+            console.log("🚀 ~ mountComponent ~ renderFn:", renderFn)
             
             // 关键修复：创建 Proxy 代理 setupState，自动解包 ref
             // 参照 Vue 3 源码及《Vue.js 设计与实现》的实现
@@ -141,6 +142,7 @@ export function mountComponent(vnode: VNode, container: HTMLElement): void {
             if (instance.render) {
                 try {
                     let subTree = instance.render()
+                    console.log("🚀 ~ mountComponent ~ subTree:", subTree)
                     
                     
                     // 如果 render 返回的是数组，需要包装成 Fragment
