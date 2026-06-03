@@ -159,45 +159,94 @@ function genProps(node: ASTElement, context: CodegenContext) {
     // 生成属性对象
     context.push(`{`)
     
-    const allKeys = [...Object.keys(props), ...Object.keys(directives).map(k => `v-${k}`)]
-    let isFirst = true
-
-    // 生成普通属性
+    // 先收集所有需要生成的属性，处理同名属性的合并
+    const propEntries: Array<{ key: string; value: string }> = []
+    
+    // 处理普通属性
     for (const key in props) {
-      if (!isFirst) context.push(`, `)
       const value = props[key]
       
       if (key.startsWith(':')) {
         // 动态绑定属性（如 :class、:id）
         // 去掉冒号前缀，值作为 JS 表达式
         const propName = key.slice(1)
-        context.push(`"${propName}": ${value}`)
+        // 确保 value 不为 undefined
+        propEntries.push({ key: propName, value: value !== undefined ? String(value) : 'undefined' })
       } else if (key.startsWith('@')) {
         // 事件绑定（如 @click）
         // 去掉 @ 前缀，值作为事件处理函数名
         const eventName = key.slice(1)
-        // 关键修复：事件处理函数的值应该是表达式，直接引用变量
-        context.push(`"on${eventName.charAt(0).toUpperCase()}${eventName.slice(1)}": ${value}`)
+        propEntries.push({ 
+          key: `on${eventName.charAt(0).toUpperCase()}${eventName.slice(1)}`, 
+          value: value !== undefined ? String(value) : 'undefined'
+        })
       } else {
         // 静态属性
-        context.push(`"${key}": ${JSON.stringify(value)}`)
+        propEntries.push({ key, value: JSON.stringify(value) })
       }
-      
-      isFirst = false
     }
 
-    // 生成指令（简化处理，仅保留指令信息）
+    // 处理指令（简化处理，仅保留指令信息）
     for (const directiveName in directives) {
-      if (!isFirst) context.push(`, `)
       const directiveValue = directives[directiveName]
-      // 在实际 Vue 中，指令会被特殊处理
-      // 这里简化为添加一个标记
-      context.push(`"v-${directiveName}": ${JSON.stringify(directiveValue || '')}`)
+      propEntries.push({ 
+        key: `v-${directiveName}`, 
+        value: JSON.stringify(directiveValue || '') 
+      })
+    }
+
+    // 合并同名属性（特别是 class）
+    const mergedProps = mergeProps(propEntries)
+    
+    // 生成合并后的属性
+    let isFirst = true
+    for (const entry of mergedProps) {
+      if (!isFirst) context.push(`, `)
+      context.push(`"${entry.key}": ${entry.value}`)
       isFirst = false
     }
 
     context.push(`}`)
   }
+}
+
+/**
+ * 合并同名属性（参照 Vue 3 源码）
+ * 特别处理 class 和 style 的合并
+ */
+function mergeProps(entries: Array<{ key: string; value: string }>): Array<{ key: string; value: string }> {
+  const result: Array<{ key: string; value: string }> = []
+  const propMap = new Map<string, string[]>()
+  
+  // 按 key 分组
+  for (const entry of entries) {
+    if (!propMap.has(entry.key)) {
+      propMap.set(entry.key, [])
+    }
+    propMap.get(entry.key)!.push(entry.value)
+  }
+  
+  // 合并相同 key 的值
+  for (const [key, values] of propMap) {
+    if (values.length === 1) {
+      // 只有一个值，直接使用
+      result.push({ key, value: values[0] })
+    } else {
+      // 多个值需要合并
+      if (key === 'class') {
+        // class 属性：使用数组包裹所有值，运行时由 normalizeClass 处理
+        result.push({ key, value: `[${values.join(', ')}]` })
+      } else if (key === 'style') {
+        // style 属性：合并对象（简化处理，暂不实现）
+        result.push({ key, value: values[values.length - 1] })
+      } else {
+        // 其他属性：后面的覆盖前面的
+        result.push({ key, value: values[values.length - 1] })
+      }
+    }
+  }
+  
+  return result
 }
 
 /**

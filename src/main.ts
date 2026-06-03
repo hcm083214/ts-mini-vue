@@ -11,7 +11,10 @@ const App = {
     <p>{{ state.title.split('').reverse().join('') }}</p>
     <p>Has published books:</p>
     <span>{{ publishedBooksMessage }}</span>
-    <div :class="{ active: isActive }"></div>
+    <div
+      class="static"
+      :class="{ active: isActive, 'text-danger': hasError }"
+    ></div>
   </div>
   `,
   setup() {
@@ -40,13 +43,15 @@ const App = {
       count.value++;
     };
 
-    const isActive = ref(false)
+    const isActive = ref(true)
+    const hasError = ref(true)
     return {
       state,
       count,
       increment,
       publishedBooksMessage,
-      isActive
+      isActive,
+      hasError
     }
   }
 };
