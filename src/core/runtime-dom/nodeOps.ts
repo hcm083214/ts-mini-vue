@@ -26,6 +26,34 @@ function shouldSetAsProps(el: HTMLElement, key: string, value: any): boolean {
     return key in el
 }
 
+/**
+ * 标准化 class 值（参照 Vue 3 源码）
+ * 支持字符串、数组、对象等多种格式
+ */
+function normalizeClass(value: any): string {
+    if (!value) return ''
+    
+    if (typeof value === 'string') {
+        return value
+    }
+    
+    if (Array.isArray(value)) {
+        return value.map(item => normalizeClass(item)).filter(Boolean).join(' ')
+    }
+    
+    if (typeof value === 'object') {
+        let result = ''
+        for (const key in value) {
+            if (value[key]) {
+                result += (result ? ' ' : '') + key
+            }
+        }
+        return result
+    }
+    
+    return String(value)
+}
+
 function patchProp(el: HTMLElement, key: string, prevValue: any, nextValue: any) {
     // 特殊处理事件绑定（以 on 开头的属性，如 onClick）
     if (key.startsWith('on')) {
@@ -42,7 +70,8 @@ function patchProp(el: HTMLElement, key: string, prevValue: any, nextValue: any)
             el.addEventListener(eventName, nextValue)
         }
     } else if (key === 'class') {
-        el.className = nextValue || ''
+        // 使用 normalizeClass 处理各种类型的 class 值
+        el.className = normalizeClass(nextValue)
     } else if (key === 'style') {
         el.style.cssText = nextValue
     } else if (shouldSetAsProps(el, key, nextValue)) {
