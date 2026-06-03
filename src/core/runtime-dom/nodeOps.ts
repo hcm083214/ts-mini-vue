@@ -54,6 +54,39 @@ function normalizeClass(value: any): string {
     return String(value)
 }
 
+/**
+ * 标准化 style 值（参照 Vue 3 源码）
+ * 支持字符串、数组、对象等多种格式
+ */
+function normalizeStyle(value: any): string {
+    if (!value) return ''
+    
+    if (typeof value === 'string') {
+        return value
+    }
+    
+    if (Array.isArray(value)) {
+        // 数组类型：递归处理每个元素并拼接
+        return value.map(item => normalizeStyle(item)).filter(Boolean).join('; ')
+    }
+    
+    if (typeof value === 'object') {
+        // 对象类型：将键值对转换为 CSS 样式字符串
+        let result = ''
+        for (const key in value) {
+            const val = value[key]
+            if (val != null) {
+                // 将驼峰命名转换为短横线命名（如 fontSize -> font-size）
+                const cssKey = key.replace(/([A-Z])/g, '-$1').toLowerCase()
+                result += (result ? '; ' : '') + `${cssKey}: ${val}`
+            }
+        }
+        return result
+    }
+    
+    return String(value)
+}
+
 function patchProp(el: HTMLElement, key: string, prevValue: any, nextValue: any) {
     // 特殊处理事件绑定（以 on 开头的属性，如 onClick）
     if (key.startsWith('on')) {
@@ -73,7 +106,8 @@ function patchProp(el: HTMLElement, key: string, prevValue: any, nextValue: any)
         // 使用 normalizeClass 处理各种类型的 class 值
         el.className = normalizeClass(nextValue)
     } else if (key === 'style') {
-        el.style.cssText = nextValue
+        // 使用 normalizeStyle 处理各种类型的 style 值
+        el.style.cssText = normalizeStyle(nextValue)
     } else if (shouldSetAsProps(el, key, nextValue)) {
         const type = typeof (el as any)[key]
         if (type === 'boolean' && nextValue === '') {

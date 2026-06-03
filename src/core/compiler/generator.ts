@@ -237,8 +237,8 @@ function mergeProps(entries: Array<{ key: string; value: string }>): Array<{ key
         // class 属性：使用数组包裹所有值，运行时由 normalizeClass 处理
         result.push({ key, value: `[${values.join(', ')}]` })
       } else if (key === 'style') {
-        // style 属性：合并对象（简化处理，暂不实现）
-        result.push({ key, value: values[values.length - 1] })
+        // style 属性：使用数组包裹所有值，运行时由 normalizeStyle 处理
+        result.push({ key, value: `[${values.join(', ')}]` })
       } else {
         // 其他属性：后面的覆盖前面的
         result.push({ key, value: values[values.length - 1] })

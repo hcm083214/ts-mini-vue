@@ -15,6 +15,13 @@ const App = {
       class="static"
       :class="{ active: isActive, 'text-danger': hasError }"
     ></div>
+    <div :class="classObject"></div>
+    <div :class="[activeClass, errorClass]"></div>
+    <div :class="[isActive ? activeClass : '', errorClass]"></div>
+    <div :class="[{ [activeClass]: isActive }, errorClass]"></div>
+    <div :style="{ color: activeColor, fontSize: fontSize + 'px' }">1</div>
+    <div :style="styleObject">2</div>
+    <h1 style="color: red" :style="'font-size: 1em'">hello</h1>
   </div>
   `,
   setup() {
@@ -43,15 +50,38 @@ const App = {
       count.value++;
     };
 
-    const isActive = ref(true)
+    const isActive = ref(false)
     const hasError = ref(true)
+    const error = ref(null)
+
+    const classObject = computed(() => ({
+      active: isActive.value && !error.value,
+      'text-danger': error.value && hasError.value
+    }))
+
+    const activeClass = ref('activeClass')
+    const errorClass = ref('errorClass')
+
+    const activeColor = ref('red')
+    const fontSize = ref(30)
+
+    const styleObject = reactive({
+      color: 'red',
+      fontSize: '30px'
+    })
     return {
       state,
       count,
       increment,
       publishedBooksMessage,
       isActive,
-      hasError
+      hasError,
+      classObject,
+      activeClass,
+      errorClass,
+      activeColor,
+      fontSize,
+      styleObject
     }
   }
 };
