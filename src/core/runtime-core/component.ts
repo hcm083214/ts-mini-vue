@@ -100,7 +100,6 @@ export function mountComponent(vnode: VNode, container: HTMLElement): void {
             
             // 创建渲染函数
             const renderFn = new Function('h', 'toDisplayString', wrappedCode)
-            console.log("🚀 ~ mountComponent ~ renderFn:", renderFn)
             
             // 关键修复：创建 Proxy 代理 setupState，自动解包 ref
             // 参照 Vue 3 源码及《Vue.js 设计与实现》的实现
@@ -113,6 +112,17 @@ export function mountComponent(vnode: VNode, container: HTMLElement): void {
                     }
                     return value
                 },
+                set(target, key, value, receiver) {
+                    // 检查目标属性是否是 ref
+                    const existingValue = Reflect.get(target, key, receiver)
+                    if (isRef(existingValue)) {
+                        // 如果是 ref，设置其 .value 属性
+                        existingValue.value = value
+                        return true
+                    }
+                    // 否则直接设置属性
+                    return Reflect.set(target, key, value, receiver)
+                },
                 has(target, key) {
                     // 确保 in 操作符能正确判断属性是否存在
                     return key in target
@@ -124,8 +134,7 @@ export function mountComponent(vnode: VNode, container: HTMLElement): void {
                 return renderFn.call(setupStateProxy, createVNode, toDisplayString)
             }
         } catch (error) {
-            console.error('Template compilation error:', error)
-            console.error('Template:', component.template)
+            // Template compilation error handling
         }
     }
     
@@ -142,7 +151,6 @@ export function mountComponent(vnode: VNode, container: HTMLElement): void {
             if (instance.render) {
                 try {
                     let subTree = instance.render()
-                    console.log("🚀 ~ mountComponent ~ subTree:", subTree)
                     
                     
                     // 如果 render 返回的是数组，需要包装成 Fragment
@@ -160,7 +168,7 @@ export function mountComponent(vnode: VNode, container: HTMLElement): void {
                     // 标记为已挂载
                     instance.isMounted = true
                 } catch (error) {
-                    console.error('Render error:', error)
+                    // Render error handling
                 }
             }
         } else {
@@ -184,7 +192,7 @@ export function mountComponent(vnode: VNode, container: HTMLElement): void {
                     }
                     
                 } catch (error) {
-                    console.error('Update error:', error)
+                    // Update error handling
                 }
             }
         }

@@ -98,9 +98,11 @@ function patchProp(el: HTMLElement, key: string, prevValue: any, nextValue: any)
             el.removeEventListener(eventName, prevValue)
         }
         
-        // 添加新的事件监听器
-        if (nextValue) {
+        // 添加新的事件监听器，确保 nextValue 是函数
+        if (nextValue && typeof nextValue === 'function') {
             el.addEventListener(eventName, nextValue)
+        } else if (nextValue) {
+            console.warn(`[patchProp] Event handler for ${eventName} is not a function:`, typeof nextValue, nextValue)
         }
     } else if (key === 'class') {
         // 使用 normalizeClass 处理各种类型的 class 值

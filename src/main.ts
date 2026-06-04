@@ -11,17 +11,45 @@ const App = {
     <p>{{ state.title.split('').reverse().join('') }}</p>
     <p>Has published books:</p>
     <span>{{ publishedBooksMessage }}</span>
-    <div
-      class="static"
-      :class="{ active: isActive, 'text-danger': hasError }"
-    ></div>
-    <div :class="classObject"></div>
-    <div :class="[activeClass, errorClass]"></div>
-    <div :class="[isActive ? activeClass : '', errorClass]"></div>
-    <div :class="[{ [activeClass]: isActive }, errorClass]"></div>
-    <div :style="{ color: activeColor, fontSize: fontSize + 'px' }">1</div>
-    <div :style="styleObject">2</div>
-    <h1 style="color: red" :style="'font-size: 1em'">hello</h1>
+    <div>
+      <div
+        class="static"
+        :class="{ active: isActive, 'text-danger': hasError }"
+      ></div>
+      <div :class="classObject"></div>
+      <div :class="[activeClass, errorClass]"></div>
+      <div :class="[isActive ? activeClass : '', errorClass]"></div>
+      <div :class="[{ [activeClass]: isActive }, errorClass]"></div>
+      <div :style="{ color: activeColor, fontSize: fontSize + 'px' }">1</div>
+      <div :style="styleObject">2</div>
+      <h1 style="color: red" :style="'font-size: 1em'">hello</h1>
+    </div>
+    <div>
+      <button @click="isActive = !isActive">Toggle</button>
+
+      <h1 v-if="isActive">Vue is awesome!</h1>
+      <h1 v-else>Oh no 😢</h1>
+      <h1 v-show="isActive">Hello!</h1>
+      <template v-if="isActive">
+        <h1>Title</h1>
+        <p>Paragraph 1</p>
+        <p>Paragraph 2</p>
+      </template>
+    </div>
+    <div>
+      <div v-if="type === 'A'">
+        A
+      </div>
+      <div v-else-if="type === 'B'">
+        B
+      </div>
+      <div v-else-if="type === 'C'">
+        C
+      </div>
+      <div v-else>
+        Not A/B/C
+      </div>
+    </div>
   </div>
   `,
   setup() {
@@ -69,6 +97,7 @@ const App = {
       color: 'red',
       fontSize: '30px'
     })
+    const type = ref('A')
     return {
       state,
       count,
@@ -81,7 +110,8 @@ const App = {
       errorClass,
       activeColor,
       fontSize,
-      styleObject
+      styleObject,
+      type
     }
   }
 };

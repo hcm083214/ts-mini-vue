@@ -128,17 +128,50 @@ function genRoot(node: ASTRoot, context: CodegenContext) {
  * 格式：h(tag, props, children)
  */
 function genElement(node: ASTElement, context: CodegenContext) {
-  // 调用 h 函数创建虚拟节点
-  context.push(`h("${node.tag}", `)
-
-  // 生成属性对象
-  genProps(node, context)
-
-  // 生成子节点
-  context.push(`, `)
-  genChildren(node, context)
-
-  context.push(`)`)
+  // 检查是否有 v-if 或 v-else-if 指令
+  const hasVIf = 'if' in node.directives
+  const hasVElseIf = 'else-if' in node.directives
+  
+  if (hasVIf || hasVElseIf) {
+    // 有条件指令，生成条件表达式
+    const condition = node.directives['if'] || node.directives['else-if'] || 'true'
+    
+    context.push(`${condition} ? `)
+    context.push(`h("${node.tag}", `)
+    
+    // 生成属性对象（不包含 v-if 或 v-else-if）
+    if (hasVIf) {
+      genPropsWithoutDirective(node, context, 'if')
+    } else {
+      genPropsWithoutDirective(node, context, 'else-if')
+    }
+    
+    // 生成子节点
+    context.push(`, `)
+    genChildren(node, context)
+    
+    context.push(`)`)
+    
+    // 检查是否有对应的 v-else 或 v-else-if
+    if (node.elseNode) {
+      context.push(` : `)
+      genElement(node.elseNode, context)
+    } else {
+      context.push(` : null`)
+    }
+  } else {
+    // 没有条件指令，正常生成
+    context.push(`h("${node.tag}", `)
+    
+    // 生成属性对象
+    genProps(node, context)
+    
+    // 生成子节点
+    context.push(`, `)
+    genChildren(node, context)
+    
+    context.push(`)`)
+  }
 }
 
 /**
@@ -176,18 +209,143 @@ function genProps(node: ASTElement, context: CodegenContext) {
         // 事件绑定（如 @click）
         // 去掉 @ 前缀，值作为事件处理函数名
         const eventName = key.slice(1)
-        propEntries.push({ 
-          key: `on${eventName.charAt(0).toUpperCase()}${eventName.slice(1)}`, 
-          value: value !== undefined ? String(value) : 'undefined'
-        })
+        const propKey = `on${eventName.charAt(0).toUpperCase()}${eventName.slice(1)}`
+        const exprValue = value !== undefined ? String(value) : ''
+        
+        // 关键修复：区分简单标识符和复杂表达式
+        // - 如果是简单标识符（如 "increment"），直接使用该标识符作为事件处理器
+        // - 如果是复杂表达式（如 "isActive = !isActive"），包装在函数中
+        if (isSimpleIdentifier(exprValue)) {
+          // 直接使用标识符，它会被 with(this) 作用域解析
+          propEntries.push({ 
+            key: propKey, 
+            value: exprValue
+          })
+        } else {
+          // 使用普通函数包装表达式，确保能访问 with(this) 作用域
+          propEntries.push({ 
+            key: propKey, 
+            value: `function($event) { ${exprValue} }`
+          })
+        }
       } else {
         // 静态属性
         propEntries.push({ key, value: JSON.stringify(value) })
       }
     }
 
-    // 处理指令（简化处理，仅保留指令信息）
+    // 处理指令
     for (const directiveName in directives) {
+      const directiveValue = directives[directiveName]
+      
+      if (directiveName === 'show') {
+        // v-show 指令：转换为 style.display 条件表达式
+        // 生成：style: [existingStyle, { display: condition ? '' : 'none' }]
+        const condition = directiveValue || 'true'
+        
+        // 检查是否已有 style 属性
+        const existingStyleIndex = propEntries.findIndex(p => p.key === 'style')
+        
+        if (existingStyleIndex !== -1) {
+          // 已有 style 属性，需要合并
+          const existingStyle = propEntries[existingStyleIndex].value
+          // 将现有 style 包装成数组，并添加 v-show 的条件样式
+          propEntries[existingStyleIndex].value = `[${existingStyle}, { display: ${condition} ? '' : 'none' }]`
+        } else {
+          // 没有 style 属性，直接添加
+          propEntries.push({ 
+            key: 'style', 
+            value: `{ display: ${condition} ? '' : 'none' }`
+          })
+        }
+      } else {
+        // 其他指令：保留为 v-xxx 属性（简化处理）
+        propEntries.push({ 
+          key: `v-${directiveName}`, 
+          value: JSON.stringify(directiveValue || '') 
+        })
+      }
+    }
+
+    // 合并同名属性（特别是 class）
+    const mergedProps = mergeProps(propEntries)
+    
+    // 生成合并后的属性
+    let isFirst = true
+    for (const entry of mergedProps) {
+      if (!isFirst) context.push(`, `)
+      context.push(`"${entry.key}": ${entry.value}`)
+      isFirst = false
+    }
+
+    context.push(`}`)
+  }
+}
+
+/**
+ * 生成元素属性（排除指定指令）
+ */
+function genPropsWithoutDirective(node: ASTElement, context: CodegenContext, excludeDirective: string) {
+  const props = node.props
+  const directives = node.directives
+
+  // 合并普通属性和指令（排除指定的指令）
+  const hasProps = Object.keys(props).length > 0
+  const hasDirectives = Object.keys(directives).filter(k => k !== excludeDirective).length > 0
+
+  if (!hasProps && !hasDirectives) {
+    // 没有属性和指令，传递 null
+    context.push(`null`)
+  } else {
+    // 生成属性对象
+    context.push(`{`)
+    
+    // 先收集所有需要生成的属性，处理同名属性的合并
+    const propEntries: Array<{ key: string; value: string }> = []
+    
+    // 处理普通属性
+    for (const key in props) {
+      const value = props[key]
+      
+      if (key.startsWith(':')) {
+        // 动态绑定属性（如 :class、:id）
+        // 去掉冒号前缀，值作为 JS 表达式
+        const propName = key.slice(1)
+        // 确保 value 不为 undefined
+        propEntries.push({ key: propName, value: value !== undefined ? String(value) : 'undefined' })
+      } else if (key.startsWith('@')) {
+        // 事件绑定（如 @click）
+        // 去掉 @ 前缀，值作为事件处理函数名
+        const eventName = key.slice(1)
+        const propKey = `on${eventName.charAt(0).toUpperCase()}${eventName.slice(1)}`
+        const exprValue = value !== undefined ? String(value) : ''
+        
+        // 关键修复：区分简单标识符和复杂表达式
+        // - 如果是简单标识符（如 "increment"），直接使用该标识符作为事件处理器
+        // - 如果是复杂表达式（如 "isActive = !isActive"），包装在函数中
+        if (isSimpleIdentifier(exprValue)) {
+          // 直接使用标识符，它会被 with(this) 作用域解析
+          propEntries.push({ 
+            key: propKey, 
+            value: exprValue
+          })
+        } else {
+          // 使用普通函数包装表达式，确保能访问 with(this) 作用域
+          propEntries.push({ 
+            key: propKey, 
+            value: `function($event) { ${exprValue} }`
+          })
+        }
+      } else {
+        // 静态属性
+        propEntries.push({ key, value: JSON.stringify(value) })
+      }
+    }
+
+    // 处理指令（简化处理，仅保留指令信息，排除指定的指令）
+    for (const directiveName in directives) {
+      if (directiveName === excludeDirective) continue
+      
       const directiveValue = directives[directiveName]
       propEntries.push({ 
         key: `v-${directiveName}`, 
@@ -208,6 +366,13 @@ function genProps(node: ASTElement, context: CodegenContext) {
 
     context.push(`}`)
   }
+}
+
+/**
+ * 判断字符串是否是简单的标识符（只包含字母、数字、下划线、美元符号）
+ */
+function isSimpleIdentifier(str: string): boolean {
+  return /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(str)
 }
 
 /**
