@@ -98,8 +98,8 @@ export function mountComponent(vnode: VNode, container: HTMLElement): void {
                 }
             `
             
-            // 创建渲染函数
-            const renderFn = new Function('h', 'toDisplayString', wrappedCode)
+            // 创建渲染函数，传入 h、toDisplayString 和 Fragment
+            const renderFn = new Function('h', 'toDisplayString', 'Fragment', wrappedCode)
             
             // 关键修复：创建 Proxy 代理 setupState，自动解包 ref
             // 参照 Vue 3 源码及《Vue.js 设计与实现》的实现
@@ -131,7 +131,7 @@ export function mountComponent(vnode: VNode, container: HTMLElement): void {
             
             // 创建包装的 render 函数，使用 Proxy 代理后的 setupState 作为 this
             instance.render = function() {
-                return renderFn.call(setupStateProxy, createVNode, toDisplayString)
+                return renderFn.call(setupStateProxy, createVNode, toDisplayString, Fragment)
             }
         } catch (error) {
             // Template compilation error handling
@@ -168,6 +168,7 @@ export function mountComponent(vnode: VNode, container: HTMLElement): void {
                     // 标记为已挂载
                     instance.isMounted = true
                 } catch (error) {
+                    console.error('[mountComponent] Render error:', error)
                     // Render error handling
                 }
             }
@@ -192,6 +193,7 @@ export function mountComponent(vnode: VNode, container: HTMLElement): void {
                     }
                     
                 } catch (error) {
+                    console.error('[mountComponent] Update error:', error)
                     // Update error handling
                 }
             }

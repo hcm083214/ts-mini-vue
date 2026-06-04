@@ -159,9 +159,10 @@ export function unmounted(el: HTMLElement | null) {
 }
 
 export function mountFragment(vnode: VNode, container: HTMLElement): void {
+    
     const children = vnode.children as VNode[]
     if (Array.isArray(children)) {
-        children.forEach(child => {
+        children.forEach((child, index) => {
             patch(null, child, container)
         })
         

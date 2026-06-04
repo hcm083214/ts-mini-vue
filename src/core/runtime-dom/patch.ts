@@ -9,6 +9,7 @@ import { mountComponent, updateComponent } from "../runtime-core/component"
  * @param container 容器元素
  */
 export function patch(n1: VNode | null, n2: VNode, container: HTMLElement): void {
+    
     // 如果新旧节点类型不同，卸载旧节点，将 n1 置为 null
     if (n1 && n1.type !== n2.type) {
         unmounted(n1.el);

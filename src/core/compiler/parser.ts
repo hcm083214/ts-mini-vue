@@ -13,6 +13,7 @@ export interface ASTElement {
   children: ASTNode[];
   elseNode?: ASTElement;
   _toRemove?: boolean;
+  _isTemplateWrapper?: boolean;  // 标记是否是带控制流指令的 <template> 元素
 }
 
 export interface ASTInterpolation {
@@ -104,6 +105,16 @@ export function parse(tokens: Token[]): ASTRoot {
         directives: token.directives || {},
         children: [] 
       };
+      
+      // 检查是否是 <template> 元素且带有控制流指令（v-if、v-else-if、v-else、v-for）
+      const isTemplateWithControlDirective = 
+        token.value === 'template' && 
+        ('if' in element.directives || 'else-if' in element.directives || 'else' in element.directives || 'for' in element.directives)
+      
+      if (isTemplateWithControlDirective) {
+        // 对于带控制流指令的 <template>，标记为需要特殊处理
+        element._isTemplateWrapper = true
+      }
       
       // 检查是否有 v-else 或 v-else-if 指令
       if ('else' in element.directives || 'else-if' in element.directives) {

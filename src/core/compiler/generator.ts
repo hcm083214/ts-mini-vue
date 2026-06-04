@@ -128,29 +128,42 @@ function genRoot(node: ASTRoot, context: CodegenContext) {
  * 格式：h(tag, props, children)
  */
 function genElement(node: ASTElement, context: CodegenContext) {
-  // 检查是否有 v-if 或 v-else-if 指令
+  // 检查是否是带控制流指令的 <template> 元素
+  const isTemplateWrapper = node._isTemplateWrapper === true
+  
+  // 检查是否有 v-if、v-else-if 或 v-else 指令
   const hasVIf = 'if' in node.directives
   const hasVElseIf = 'else-if' in node.directives
+  const hasVElse = 'else' in node.directives
   
   if (hasVIf || hasVElseIf) {
-    // 有条件指令，生成条件表达式
+    // 有 v-if 或 v-else-if 指令，生成条件表达式
     const condition = node.directives['if'] || node.directives['else-if'] || 'true'
     
     context.push(`${condition} ? `)
-    context.push(`h("${node.tag}", `)
     
-    // 生成属性对象（不包含 v-if 或 v-else-if）
-    if (hasVIf) {
-      genPropsWithoutDirective(node, context, 'if')
+    if (isTemplateWrapper) {
+      // 对于 <template v-if>，不生成 template 元素，直接生成子元素（包装成 Fragment）
+      context.push(`h(Fragment, null, `)
+      genChildren(node, context)
+      context.push(`)`)
     } else {
-      genPropsWithoutDirective(node, context, 'else-if')
+      // 普通元素，正常生成
+      context.push(`h("${node.tag}", `)
+      
+      // 生成属性对象（不包含 v-if 或 v-else-if）
+      if (hasVIf) {
+        genPropsWithoutDirective(node, context, 'if')
+      } else {
+        genPropsWithoutDirective(node, context, 'else-if')
+      }
+      
+      // 生成子节点
+      context.push(`, `)
+      genChildren(node, context)
+      
+      context.push(`)`)
     }
-    
-    // 生成子节点
-    context.push(`, `)
-    genChildren(node, context)
-    
-    context.push(`)`)
     
     // 检查是否有对应的 v-else 或 v-else-if
     if (node.elseNode) {
@@ -159,18 +172,45 @@ function genElement(node: ASTElement, context: CodegenContext) {
     } else {
       context.push(` : null`)
     }
+  } else if (hasVElse) {
+    // 只有 v-else 指令（作为条件链的末尾）
+    if (isTemplateWrapper) {
+      // 对于 <template v-else>，不生成 template 元素，直接生成子元素（包装成 Fragment）
+      context.push(`h(Fragment, null, `)
+      genChildren(node, context)
+      context.push(`)`)
+    } else {
+      // 普通元素，正常生成（但不包含 v-else 属性）
+      context.push(`h("${node.tag}", `)
+      
+      // 生成属性对象（排除 v-else 指令）
+      genPropsWithoutDirective(node, context, 'else')
+      
+      // 生成子节点
+      context.push(`, `)
+      genChildren(node, context)
+      
+      context.push(`)`)
+    }
   } else {
     // 没有条件指令，正常生成
-    context.push(`h("${node.tag}", `)
-    
-    // 生成属性对象
-    genProps(node, context)
-    
-    // 生成子节点
-    context.push(`, `)
-    genChildren(node, context)
-    
-    context.push(`)`)
+    if (isTemplateWrapper) {
+      // 对于不带条件指令的 <template>，也作为 Fragment 处理
+      context.push(`h(Fragment, null, `)
+      genChildren(node, context)
+      context.push(`)`)
+    } else {
+      context.push(`h("${node.tag}", `)
+      
+      // 生成属性对象
+      genProps(node, context)
+      
+      // 生成子节点
+      context.push(`, `)
+      genChildren(node, context)
+      
+      context.push(`)`)
+    }
   }
 }
 

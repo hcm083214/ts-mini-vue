@@ -97,7 +97,7 @@ const App = {
       color: 'red',
       fontSize: '30px'
     })
-    const type = ref('A')
+    const type = ref('E')
     return {
       state,
       count,
