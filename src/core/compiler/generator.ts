@@ -136,7 +136,14 @@ function genElement(node: ASTElement, context: CodegenContext) {
   const hasVElseIf = 'else-if' in node.directives
   const hasVElse = 'else' in node.directives
   
-  if (hasVIf || hasVElseIf) {
+  // 检查是否有 v-for 指令
+  const hasVFor = 'for' in node.directives
+  
+  if (hasVFor) {
+    // 有 v-for 指令，生成列表渲染代码
+    // 注意：v-for 返回数组，但不在此处包裹，由父元素的 children 处理
+    genForDirective(node, context)
+  } else if (hasVIf || hasVElseIf) {
     // 有 v-if 或 v-else-if 指令，生成条件表达式
     const condition = node.directives['if'] || node.directives['else-if'] || 'true'
     
@@ -463,17 +470,28 @@ function genChildren(node: ASTElement, context: CodegenContext) {
     return
   }
 
-  if (node.children.length === 1) {
-    // 单个子节点，直接生成
+  // 检查是否有子元素包含 v-for 指令
+  const hasVForChild = node.children.some(child => 
+    child.type === 'Element' && 'for' in child.directives
+  )
+
+  if (node.children.length === 1 && !hasVForChild) {
+    // 单个子节点且没有 v-for，直接生成
     genNode(node.children[0], context)
   } else {
-    // 多个子节点，生成数组
+    // 多个子节点或包含 v-for，生成数组
     context.push(`[`)
     context.indent()
     context.newLine()
 
     node.children.forEach((child, index) => {
+      // 如果子元素有 v-for 指令，使用展开运算符
+      if (child.type === 'Element' && 'for' in child.directives) {
+        context.push(`...`)
+      }
+      
       genNode(child, context)
+      
       if (index < node.children.length - 1) {
         context.push(`,`)
         context.newLine()
@@ -513,4 +531,219 @@ function genComment(node: ASTComment, context: CodegenContext) {
   // 简化处理：生成 null（注释在生产环境中通常被移除）
   // 如果需要保留注释，可以生成：h(Comment, null, "comment content")
   context.push(`null /* ${node.content} */`)
+}
+
+/**
+ * 生成 v-for 指令代码
+ * 参照 Vue 3 源码及《Vue.js 设计与实现》的实现
+ * 
+ * 支持的语法：
+ * - v-for="item in items" - 数组遍历
+ * - v-for="(item, index) in items" - 带索引的数组遍历
+ * - v-for="(value, key, index) in object" - 对象遍历
+ * - v-for="n in 10" - 数字迭代（从 1 到 10）
+ * 
+ * 生成的代码格式：
+ * - 数组：(items).map((item, index) => { return h(...) })
+ * - 对象：Object.keys(source).map((key, index) => { const value = source[key]; return h(...) })
+ * - 数字：Array.from({ length: source }, (_, i) => { const item = i + 1; return h(...) })
+ */
+function genForDirective(node: ASTElement, context: CodegenContext) {
+  const forExpression = node.directives['for']
+  
+  if (!forExpression) {
+    // 如果没有表达式，降级为普通元素
+    context.push(`h("${node.tag}", `)
+    genProps(node, context)
+    context.push(`, `)
+    genChildren(node, context)
+    context.push(`)`)
+    return
+  }
+  
+  // 解析 v-for 表达式
+  const parsed = parseForExpression(forExpression)
+  
+  if (!parsed) {
+    // 解析失败，降级为普通元素
+    context.push(`h("${node.tag}", `)
+    genProps(node, context)
+    context.push(`, `)
+    genChildren(node, context)
+    context.push(`)`)
+    return
+  }
+  
+  const { source, value, key, index } = parsed
+  
+  // 判断 source 是否是字面量数字
+  // 检查是否是纯数字字面量（如 "10"、"100"）
+  const isNumberLiteral = /^\d+$/.test(source.trim())
+  
+  // 判断是对象遍历还是数组遍历
+  // 如果有 key 参数（第三个参数），说明是对象遍历：(value, key, index)
+  const isObjectIteration = key !== undefined
+  
+  if (isNumberLiteral) {
+    // 数字迭代：使用 Array.from 生成数组
+    // 格式：Array.from({ length: source }, (_, i) => { const value = i + 1; return h(...) })
+    
+    // 构建参数列表：(_, i) 或 (i)
+    const params = ['_', 'i']
+    const paramStr = params.join(', ')
+    
+    // 生成 Array.from() 调用
+    context.push(`Array.from({ length: ${source} }, (${paramStr}) => { `)
+    
+    // 在回调函数内部定义 value 变量（从 1 开始）
+    context.push(`const ${value} = i + 1; return `)
+  } else if (isObjectIteration) {
+    // 对象遍历：使用 Object.keys() 转换为数组
+    // 格式：Object.keys(source).map((key, index) => { const value = source[key]; return h(...) })
+    
+    // 构建参数列表：(key, index)
+    const params = [key!]
+    if (index) params.push(index)
+    const paramStr = params.join(', ')
+    
+    // 生成 Object.keys().map() 调用
+    context.push(`Object.keys(${source}).map((${paramStr}) => { `)
+    
+    // 在回调函数内部定义 value 变量
+    context.push(`const ${value} = ${source}[${key}]; return `)
+  } else {
+    // 数组遍历：直接使用 .map()
+    // 格式：(source).map((value, index) => { return h(...) })
+    
+    // 构建参数列表
+    const params = [value]
+    if (index) params.push(index)
+    const paramStr = params.join(', ')
+    
+    // 生成 map 调用
+    context.push(`(${source}).map((${paramStr}) => { return `)
+  }
+  
+  // 检查是否是带控制流指令的 <template> 元素
+  const isTemplateWrapper = node._isTemplateWrapper === true
+  
+  // 生成单个元素的 VNode
+  // 注意：这里需要排除 v-for 指令本身，但保留其他属性和指令
+  if (isTemplateWrapper) {
+    // 对于 <template v-for>，生成 Fragment
+    context.push(`h(Fragment, null, `)
+    genChildrenWithoutFor(node, context)
+    context.push(`)`)
+  } else {
+    // 普通元素
+    context.push(`h("${node.tag}", `)
+    
+    // 生成属性（排除 v-for 指令）
+    genPropsWithoutDirective(node, context, 'for')
+    
+    context.push(`, `)
+    genChildrenWithoutFor(node, context)
+    
+    context.push(`)`)
+  }
+  
+  context.push(` })`)
+}
+
+/**
+ * 解析 v-for 表达式
+ * 支持以下格式：
+ * - "item in items" -> { source: 'items', value: 'item' }
+ * - "(item, index) in items" -> { source: 'items', value: 'item', index: 'index' }
+ * - "(value, key, index) in object" -> { source: 'object', value: 'value', key: 'key', index: 'index' }
+ */
+function parseForExpression(expression: string): {
+  source: string
+  value: string
+  key?: string
+  index?: string
+} | null {
+  // 匹配 "in" 或 "of" 关键字
+  const inMatch = expression.match(/^(.*)\s+(?:in|of)\s+(.*)$/)
+  
+  if (!inMatch) {
+    return null
+  }
+  
+  const leftPart = inMatch[1].trim()
+  const source = inMatch[2].trim()
+  
+  // 解析左边的变量声明部分
+  // 可能是：item 或 (item, index) 或 (value, key, index)
+  let value: string
+  let key: string | undefined
+  let index: string | undefined
+  
+  if (leftPart.startsWith('(') && leftPart.endsWith(')')) {
+    // 有括号的情况：(item, index) 或 (value, key, index)
+    const inner = leftPart.slice(1, -1).trim()
+    const parts = inner.split(',').map(p => p.trim())
+    
+    if (parts.length === 1) {
+      value = parts[0]
+    } else if (parts.length === 2) {
+      value = parts[0]
+      index = parts[1]
+    } else if (parts.length === 3) {
+      value = parts[0]
+      key = parts[1]
+      index = parts[2]
+    } else {
+      return null
+    }
+  } else {
+    // 没有括号的情况：item
+    value = leftPart
+  }
+  
+  // 验证变量名是否合法
+  const isValidIdentifier = (name: string) => /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(name)
+  
+  if (!isValidIdentifier(value)) {
+    return null
+  }
+  if (key && !isValidIdentifier(key)) {
+    return null
+  }
+  if (index && !isValidIdentifier(index)) {
+    return null
+  }
+  
+  return { source, value, key, index }
+}
+
+/**
+ * 生成子节点（排除嵌套的 v-for 元素）
+ * 用于 <template v-for> 场景
+ * 
+ * 注意：对于 Fragment，子节点必须始终是数组格式
+ */
+function genChildrenWithoutFor(node: ASTElement, context: CodegenContext) {
+  if (!node.children || node.children.length === 0) {
+    context.push(`null`)
+    return
+  }
+
+  // 始终生成数组，即使是单个子节点
+  // 这是因为 Fragment 需要数组格式的子节点
+  context.push(`[`)
+  context.indent()
+  context.newLine()
+
+  node.children.forEach((child, index) => {
+    genNode(child, context)
+    if (index < node.children.length - 1) {
+      context.push(`,`)
+      context.newLine()
+    }
+  })
+
+  context.deindent()
+  context.newLine()
+  context.push(`]`)
 }

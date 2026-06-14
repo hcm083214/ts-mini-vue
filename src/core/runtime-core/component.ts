@@ -82,6 +82,10 @@ export function mountComponent(vnode: VNode, container: HTMLElement): void {
             // 编译模板为渲染函数字符串
             const renderCode = compile(component.template)
             
+            // 调试：输出完整的编译结果
+            console.log('[Component] Full compiled template:')
+            console.log(renderCode)
+            
             // 提取函数体
             const match = renderCode.match(/return\s+function\s+render\s*\(\)\s*\{([\s\S]*)\}\s*$/)
             

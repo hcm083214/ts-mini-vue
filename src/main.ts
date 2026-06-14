@@ -50,6 +50,21 @@ const App = {
         Not A/B/C
       </div>
     </div>
+    <div>
+      <li v-for="(item, index) in items">
+        {{ parentMessage }} - {{ index }} - {{ item.message }}
+      </li>
+      <li v-for="(value, key, index) in myObject">
+        {{ index }}. {{ key }}: {{ value }}
+      </li>
+      <span v-for="n in 10">{{ n }}</span>
+      <ul>
+        <template v-for="item in items">
+          <li>{{ item.msg }}</li>
+          <li class="divider" role="presentation"></li>
+        </template>
+      </ul>
+    </div>
   </div>
   `,
   setup() {
@@ -98,6 +113,13 @@ const App = {
       fontSize: '30px'
     })
     const type = ref('E')
+    const parentMessage = ref('Parent')
+    const items = ref([{ message: 'Foo' }, { message: 'Bar' }])
+    const myObject = reactive({
+      title: 'How to do lists in Vue',
+      author: 'Jane Doe',
+      publishedAt: '2016-04-10'
+    })
     return {
       state,
       count,
@@ -111,7 +133,10 @@ const App = {
       activeColor,
       fontSize,
       styleObject,
-      type
+      type,
+      parentMessage,
+      items,
+      myObject
     }
   }
 };
