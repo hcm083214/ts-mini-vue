@@ -23,6 +23,9 @@ const App = {
       <div :style="{ color: activeColor, fontSize: fontSize + 'px' }">1</div>
       <div :style="styleObject">2</div>
       <h1 style="color: red" :style="'font-size: 1em'">hello</h1>
+      <button @click="(event) => console.log('Form cannot be submitted yet.', event)">
+        Submit
+      </button>
     </div>
     <div>
       <button @click="isActive = !isActive">Toggle</button>
@@ -60,8 +63,8 @@ const App = {
       <span v-for="n in 10">{{ n }}</span>
       <ul>
         <template v-for="item in items">
-          <li>{{ item.msg }}</li>
-          <li class="divider" role="presentation"></li>
+          <li>{{ item.message }}</li>
+          <li class="divider" role="presentation">11</li>
         </template>
       </ul>
     </div>

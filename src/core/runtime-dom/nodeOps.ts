@@ -93,16 +93,38 @@ function patchProp(el: HTMLElement, key: string, prevValue: any, nextValue: any)
         // 提取事件名称（去掉 'on' 前缀并转为小写）
         const eventName = key.slice(2).toLowerCase()
         
-        // 移除旧的事件监听器
-        if (prevValue) {
-            el.removeEventListener(eventName, prevValue)
+        // 参照 Vue 3 源码及《Vue.js设计与实现》实现 invoker 模式
+        // 用于缓存事件处理函数，确保更新时能正确移除监听器
+        const invokerKey = `_vei`
+        const invokers = (el as any)[invokerKey] || ((el as any)[invokerKey] = {})
+        
+        // 获取之前缓存的 invoker
+        let invoker = invokers[eventName]
+        
+        if (nextValue && typeof nextValue === 'function') {
+            // 事件处理函数是函数类型
+            if (invoker) {
+                // 已有 invoker，更新其绑定的函数（invoker 本身就是监听器，不需要重新绑定）
+                invoker.fns = nextValue
+            } else {
+                // 没有 invoker，创建新的 invoker 函数
+                // invoker 是一个函数，同时有 fns 属性存储实际的处理函数
+                const invokerFn = function(this: any, ...args: any[]) {
+                    return invokerFn.fns.apply(this, args)
+                } as any
+                invokerFn.fns = nextValue
+                invoker = invokers[eventName] = invokerFn
+                el.addEventListener(eventName, invoker)
+            }
+        } else if (invoker) {
+            // nextValue 不是函数但存在 invoker，移除监听器
+            el.removeEventListener(eventName, invoker)
+            invokers[eventName] = null
         }
         
-        // 添加新的事件监听器，确保 nextValue 是函数
-        if (nextValue && typeof nextValue === 'function') {
-            el.addEventListener(eventName, nextValue)
-        } else if (nextValue) {
-            console.warn(`[patchProp] Event handler for ${eventName} is not a function:`, typeof nextValue, nextValue)
+        // 移除旧的事件监听器（如果存在但不是 invoker 模式）
+        if (prevValue && typeof prevValue === 'function' && prevValue !== invoker?.fns) {
+            el.removeEventListener(eventName, prevValue)
         }
     } else if (key === 'class') {
         // 使用 normalizeClass 处理各种类型的 class 值

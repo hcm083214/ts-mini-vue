@@ -259,11 +259,18 @@ function genProps(node: ASTElement, context: CodegenContext) {
         const propKey = `on${eventName.charAt(0).toUpperCase()}${eventName.slice(1)}`
         const exprValue = value !== undefined ? String(value) : ''
         
-        // 关键修复：区分简单标识符和复杂表达式
+        // 参照 Vue 3 源码：区分简单标识符、函数表达式和复杂表达式
         // - 如果是简单标识符（如 "increment"），直接使用该标识符作为事件处理器
+        // - 如果是函数表达式（如 "(e) => console.log(e)"），直接使用
         // - 如果是复杂表达式（如 "isActive = !isActive"），包装在函数中
         if (isSimpleIdentifier(exprValue)) {
           // 直接使用标识符，它会被 with(this) 作用域解析
+          propEntries.push({ 
+            key: propKey, 
+            value: exprValue
+          })
+        } else if (isFunctionExpression(exprValue)) {
+          // 已经是函数表达式，直接使用
           propEntries.push({ 
             key: propKey, 
             value: exprValue
@@ -367,11 +374,18 @@ function genPropsWithoutDirective(node: ASTElement, context: CodegenContext, exc
         const propKey = `on${eventName.charAt(0).toUpperCase()}${eventName.slice(1)}`
         const exprValue = value !== undefined ? String(value) : ''
         
-        // 关键修复：区分简单标识符和复杂表达式
+        // 参照 Vue 3 源码：区分简单标识符、函数表达式和复杂表达式
         // - 如果是简单标识符（如 "increment"），直接使用该标识符作为事件处理器
+        // - 如果是函数表达式（如 "(e) => console.log(e)"），直接使用
         // - 如果是复杂表达式（如 "isActive = !isActive"），包装在函数中
         if (isSimpleIdentifier(exprValue)) {
           // 直接使用标识符，它会被 with(this) 作用域解析
+          propEntries.push({ 
+            key: propKey, 
+            value: exprValue
+          })
+        } else if (isFunctionExpression(exprValue)) {
+          // 已经是函数表达式，直接使用
           propEntries.push({ 
             key: propKey, 
             value: exprValue
@@ -420,6 +434,22 @@ function genPropsWithoutDirective(node: ASTElement, context: CodegenContext, exc
  */
 function isSimpleIdentifier(str: string): boolean {
   return /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(str)
+}
+
+/**
+ * 判断字符串是否是函数表达式（参照 Vue 3 源码）
+ * 支持箭头函数和 function 表达式
+ */
+function isFunctionExpression(str: string): boolean {
+  // 箭头函数：包含 => 且不是在字符串中
+  if (/\s*=>\s*/.test(str)) {
+    return true
+  }
+  // function 表达式：以 function 开头
+  if (/^\s*function\s*\(/.test(str)) {
+    return true
+  }
+  return false
 }
 
 /**
