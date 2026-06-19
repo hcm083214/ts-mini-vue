@@ -31,7 +31,7 @@ export interface RouterOptions {
 }
 
 export interface Router {
-  currentRoute: RouteLocationNormalized
+  currentRoute: { value: RouteLocationNormalized }
   push(to: string | { path?: string; name?: string; params?: Record<string, string>; query?: Record<string, string> }): void
   replace(to: string | { path?: string; name?: string; params?: Record<string, string>; query?: Record<string, string> }): void
   go(n: number): void

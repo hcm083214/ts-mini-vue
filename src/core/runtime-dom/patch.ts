@@ -60,17 +60,16 @@ function patchFragment(n1: VNode, n2: VNode, container: HTMLElement): void {
     const c2 = n2.children as VNode[];
 
     if (Array.isArray(c1) && Array.isArray(c2)) {
-        // 简化实现：使用 patchKeyedChildren 进行 diff
         patchKeyedChildren(c1, c2, container);
     } else if (Array.isArray(c2)) {
-        // 旧的不是数组，新的是数组，清空后重新挂载
         container.innerHTML = '';
         c2.forEach(child => {
             patch(null, child, container);
         });
+    } else {
+        container.innerHTML = '';
     }
     
-    // 更新 Fragment 的 el 为第一个子节点的 el
     if (c2 && c2.length > 0 && c2[0]) {
         n2.el = c2[0].el;
     }
@@ -137,6 +136,7 @@ function patchChildren(n1: VNode, n2: VNode, container: HTMLElement): void {
             }
         } else {
             // 旧子节点是数组或 null，清空后设置文本
+            container.innerHTML = '';
             container.textContent = c2;
         }
     } else if (Array.isArray(c2)) {
@@ -160,11 +160,9 @@ function patchChildren(n1: VNode, n2: VNode, container: HTMLElement): void {
             container.innerHTML = '';
             c2.forEach(child => {
                 if (typeof child === 'string') {
-                    // 字符串类型，创建文本节点
                     const textNode = document.createTextNode(child);
                     container.appendChild(textNode);
                 } else if (child !== null && child !== undefined) {
-                    // VNode 类型，递归 patch
                     patch(null, child as VNode, container);
                 }
             });
@@ -198,7 +196,6 @@ function patchKeyedChildren(
     let e1 = c1.length - 1; // 旧子节点末尾索引
     let e2 = l2 - 1; // 新子节点末尾索引
 
-    // 1. 从头部开始同步
     while (i <= e1 && i <= e2) {
         const n1 = c1[i];
         const n2 = c2[i];
@@ -211,7 +208,6 @@ function patchKeyedChildren(
         i++;
     }
 
-    // 2. 从尾部开始同步
     while (i <= e1 && i <= e2) {
         const n1 = c1[e1];
         const n2 = c2[e2];
@@ -225,7 +221,6 @@ function patchKeyedChildren(
         e2--;
     }
 
-    // 3. 旧子节点已遍历完，新子节点还有剩余，需要挂载新节点
     if (i > e1) {
         if (i <= e2) {
             const nextPos = e2 + 1;
@@ -237,14 +232,12 @@ function patchKeyedChildren(
             }
         }
     }
-    // 4. 新子节点已遍历完，旧子节点还有剩余，需要卸载旧节点
     else if (i > e2) {
         while (i <= e1) {
             unmounted(c1[i].el);
             i++;
         }
     }
-    // 5. 中间部分需要 diff
     else {
         const s1 = i; // 旧子节点起始索引
         const s2 = i; // 新子节点起始索引

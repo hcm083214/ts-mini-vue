@@ -1,10 +1,10 @@
 // vue-router/routerView.ts - RouterView 组件
 // 参照 Vue Router 4 源码
 
-import { h, type Component } from '../runtime-core/h'
+import { h } from '../runtime-core/h'
 import { useRouter } from './router'
 import type { RouteRecord } from './types'
-import { onMounted, onUnmounted } from '../reactivity/reactive'
+import { onUnmounted } from '../reactivity/reactive'
 import { watchEffect } from '../reactivity/index'
 
 export const RouterView = {
@@ -13,7 +13,7 @@ export const RouterView = {
     const router = useRouter()
     const viewDepth = (props as any).depth || 0
     
-    let currentComponent: Component | null = null
+    let currentComponent: any = null
     let currentRouteRecord: RouteRecord | null = null
     let unsubscribe: () => void
     
@@ -23,7 +23,7 @@ export const RouterView = {
       
       if (matched.length > viewDepth) {
         currentRouteRecord = matched[viewDepth]
-        currentComponent = currentRouteRecord.component
+        currentComponent = currentRouteRecord!.component
       } else {
         currentRouteRecord = null
         currentComponent = null

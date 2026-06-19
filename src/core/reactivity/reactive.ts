@@ -72,10 +72,13 @@ function trigger(target: TrackTarget, key: TrackKey) {
   const deps = depsMap.get(key);
 
   if (deps) {
-    // 创建副本以防止无限循环或在迭代期间修改集合
     const effectsToRun = new Set(deps);
     effectsToRun.forEach(effectFn => {
-      effectFn.effect();
+      if ((effectFn as any).scheduler) {
+        (effectFn as any).scheduler();
+      } else {
+        effectFn.effect();
+      }
     });
   } else {
     console.warn(`[trigger] 无法触发依赖: ${target} `);
@@ -137,10 +140,13 @@ function computed<T>(getter: () => T): ComputedRef<T> {
 }
 
 // 执行副作用函数 (Watch Effect)
-function watchEffect(fn: () => void) {
+function watchEffect(fn: () => void): () => void {
   const effect = new ReactiveEffect(fn);
   effect.effect();
-  return effect;
+  return () => {
+    effect.deps.forEach(dep => dep.delete(effect));
+    effect.deps.length = 0;
+  };
 }
 
 // 生命周期钩子（保持兼容）
@@ -166,10 +172,145 @@ export function triggerUnmounted() {
   onUnmountedCallbacks.length = 0
 }
 
+// Watch 回调类型
+type WatchCallback<T = any> = (newValue: T, oldValue: T, onCleanup: (cleanupFn: () => void) => void) => void;
+
+// Watch 选项
+interface WatchOptions {
+  immediate?: boolean;
+  deep?: boolean;
+  flush?: 'pre' | 'post' | 'sync';
+}
+
+// Watch 数据源类型
+type WatchSource<T = any> = Ref<T> | (() => T);
+
+/**
+ * watch 实现 - 基于 Vue 3 源码设计
+ * @param source 数据源（ref 或 getter 函数）
+ * @param cb 回调函数
+ * @param options 选项
+ */
+function watch<T>(
+  source: WatchSource<T>,
+  cb: WatchCallback<T>,
+  options: WatchOptions = {}
+): () => void {
+  const { immediate = false, deep = false, flush = 'pre' } = options;
+
+  let oldValue: T;
+  let newValue: T;
+  let cleanup: (() => void) | undefined;
+
+  // 清理函数注册器
+  const onCleanup = (fn: () => void) => {
+    cleanup = fn;
+  };
+
+  // 执行清理函数
+  const executeCleanup = () => {
+    if (cleanup) {
+      cleanup();
+      cleanup = undefined;
+    }
+  };
+
+  // 获取 getter 函数
+  const getter: () => T = isRef(source)
+    ? () => source.value
+    : source as () => T;
+
+  // job 函数 - 在依赖变化时执行
+  const job = () => {
+    // 获取新值
+    newValue = getter();
+
+    // 执行清理
+    executeCleanup();
+
+    // 触发回调
+    cb(newValue, oldValue, onCleanup);
+
+    // 更新旧值
+    oldValue = newValue;
+  };
+
+  // 创建调度器
+  let scheduler: (job: () => void) => void;
+  if (flush === 'sync') {
+    scheduler = (job) => job();
+  } else if (flush === 'post') {
+    scheduler = (job) => Promise.resolve().then(job);
+  } else {
+    // pre - 默认行为，使用微任务但在组件更新前执行
+    scheduler = (job) => Promise.resolve().then(job);
+  }
+
+  // 创建 ReactiveEffect
+  let effect: ReactiveEffect;
+
+  effect = new ReactiveEffect(() => {
+    // 如果是深度监听，递归访问对象属性以触发 track
+    const value = getter();
+    if (deep && isObject(value)) {
+      traverse(value);
+    }
+    return value;
+  });
+
+  // 设置调度器
+  (effect as any).scheduler = () => scheduler(job);
+
+  // 初始化
+  const run = () => {
+    effect.run();
+  };
+
+  // 首次执行获取初始值
+  oldValue = getter();
+
+  // 如果 immediate 为 true，立即执行回调
+  if (immediate) {
+    job();
+  }
+
+  // 启动依赖追踪
+  run();
+
+  // 返回停止函数
+  return () => {
+    effect.deps.forEach(dep => dep.delete(effect));
+    effect.deps.length = 0;
+  };
+}
+
+/**
+ * 递归遍历对象，触发所有属性的 track（用于深度监听）
+ */
+function traverse(value: any, seen = new Set()): any {
+  if (!isObject(value) || seen.has(value)) {
+    return value;
+  }
+  seen.add(value);
+  if (Array.isArray(value)) {
+    for (let i = 0; i < value.length; i++) {
+      traverse(value[i], seen);
+    }
+  } else {
+    for (const key in value) {
+      if (Object.prototype.hasOwnProperty.call(value, key)) {
+        traverse((value as Record<string, any>)[key], seen);
+      }
+    }
+  }
+  return value;
+}
+
 // 导出所有响应式 API（除了已单独导出的函数）
 export { 
   reactive, 
   computed, 
   watchEffect,
+  watch,
   ReactiveEffect
 }

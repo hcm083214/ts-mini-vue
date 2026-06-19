@@ -5,6 +5,7 @@ export {
     reactive, 
     ref, 
     computed, 
+    watch,
     watchEffect, 
     onMounted, 
     onUnmounted,

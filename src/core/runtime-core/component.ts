@@ -254,7 +254,12 @@ export function mountComponent(vnode: VNode, container: HTMLElement): void {
                     
                     // 使用保存的 container 进行 patch
                     if (newSubTree) {
-                        patch(instance.subTree, newSubTree, instance.container)
+                        // 获取正确的容器元素
+                        let patchContainer = instance.container
+                        if (instance.subTree.el && instance.subTree.el.parentNode) {
+                            patchContainer = instance.subTree.el.parentNode as HTMLElement
+                        }
+                        patch(instance.subTree, newSubTree, patchContainer)
                         instance.subTree = newSubTree
                     }
                     

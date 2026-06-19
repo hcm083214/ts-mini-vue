@@ -4,6 +4,7 @@ export {
     ref, 
     isRef,
     computed, 
+    watch,
     watchEffect, 
     onMounted, 
     onUnmounted, 
