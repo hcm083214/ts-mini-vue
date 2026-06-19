@@ -19,6 +19,7 @@ export {
     createVNode, 
     toDisplayString,
     Fragment,
+    resolveComponent,
     type VNode,
     type Component,
     type ComponentInstance

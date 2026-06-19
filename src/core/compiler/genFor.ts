@@ -1,15 +1,17 @@
 import { ASTElement } from './parser'
 import { CodegenContext } from './generator'
 import { genProps, genPropsWithoutDirective, genChildren, genChildrenWithoutFor } from './genElementImpl'
+import { getTagCode } from './genElement'
 
 /**
  * 生成 v-for 指令代码
  */
 export function genForDirective(node: ASTElement, context: CodegenContext) {
   const forExpression = node.directives['for']
+  const tagCode = getTagCode(node.tag)
   
   if (!forExpression) {
-    context.push(`h("${node.tag}", `)
+    context.push(`h(${tagCode}, `)
     genProps(node, context)
     context.push(`, `)
     genChildren(node, context)
@@ -20,7 +22,7 @@ export function genForDirective(node: ASTElement, context: CodegenContext) {
   const parsed = parseForExpression(forExpression)
   
   if (!parsed) {
-    context.push(`h("${node.tag}", `)
+    context.push(`h(${tagCode}, `)
     genProps(node, context)
     context.push(`, `)
     genChildren(node, context)
@@ -61,7 +63,7 @@ export function genForDirective(node: ASTElement, context: CodegenContext) {
     genChildrenWithoutFor(node, context)
     context.push(`)`)
   } else {
-    context.push(`h("${node.tag}", `)
+    context.push(`h(${tagCode}, `)
     genPropsWithoutDirective(node, context, 'for')
     context.push(`, `)
     genChildrenWithoutFor(node, context)

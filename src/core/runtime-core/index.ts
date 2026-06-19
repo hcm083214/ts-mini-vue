@@ -8,6 +8,8 @@ export {
     mountComponent, 
     updateComponent,
     resolveProps,
+    resolveComponent,
+    setCurrentInstance,
 } from './component'
 export { createRenderer } from './renderer'
 export { createApp } from './apiCreateApp'

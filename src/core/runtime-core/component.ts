@@ -27,6 +27,7 @@ export interface Component<P = Record<string, any>> {
     template?: string  // 支持模板字符串
     props?: string[]
     emits?: string[]
+    components?: Record<string, Component>  // 注册的组件
 }
 
 /**
@@ -34,6 +35,34 @@ export interface Component<P = Record<string, any>> {
  */
 export function resolveProps(component: Component, rawProps: Record<string, any>): Record<string, any> {
     return { ...rawProps }
+}
+
+/**
+ * 解析组件
+ * 参照 Vue 3 源码：从当前组件实例中查找注册的组件
+ */
+let currentInstance: ComponentInstance | null = null
+
+export function setCurrentInstance(instance: ComponentInstance | null) {
+    currentInstance = instance
+}
+
+export function resolveComponent(name: string): Component | string {
+    if (!currentInstance) {
+        // 没有当前实例，返回字符串（作为原生元素）
+        return name
+    }
+    
+    const component = currentInstance.vnode.type as Component
+    const registeredComponents = component.components || {}
+    
+    // 查找注册的组件
+    if (registeredComponents[name]) {
+        return registeredComponents[name]
+    }
+    
+    // 未找到，返回字符串（作为原生元素）
+    return name
 }
 
 
@@ -102,8 +131,8 @@ export function mountComponent(vnode: VNode, container: HTMLElement): void {
                 }
             `
             
-            // 创建渲染函数，传入 h、toDisplayString 和 Fragment
-            const renderFn = new Function('h', 'toDisplayString', 'Fragment', wrappedCode)
+            // 创建渲染函数，传入 h、toDisplayString、Fragment 和 resolveComponent
+            const renderFn = new Function('h', 'toDisplayString', 'Fragment', 'resolveComponent', wrappedCode)
             
             // 关键修复：创建 Proxy 代理 setupState，自动解包 ref
             // 参照 Vue 3 源码及《Vue.js 设计与实现》的实现
@@ -135,7 +164,14 @@ export function mountComponent(vnode: VNode, container: HTMLElement): void {
             
             // 创建包装的 render 函数，使用 Proxy 代理后的 setupState 作为 this
             instance.render = function() {
-                return renderFn.call(setupStateProxy, createVNode, toDisplayString, Fragment)
+                // 设置当前实例，用于 resolveComponent
+                setCurrentInstance(instance)
+                try {
+                    return renderFn.call(setupStateProxy, createVNode, toDisplayString, Fragment, resolveComponent)
+                } finally {
+                    // 渲染完成后清除当前实例
+                    setCurrentInstance(null)
+                }
             }
         } catch (error) {
             // Template compilation error handling
