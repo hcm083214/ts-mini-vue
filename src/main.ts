@@ -68,6 +68,13 @@ const App = {
         </template>
       </ul>
     </div>
+    <div>
+      <p>Message is: {{ text }}</p>
+      <input v-model="text" placeholder="edit me" />
+      <textarea v-model="text"></textarea>
+      <input type="checkbox" id="checkbox" v-model="checked" />
+      <label for="checkbox">{{ checked }}</label>
+    </div>
   </div>
   `,
   setup() {
@@ -135,6 +142,8 @@ const App = {
       errorClass,
       activeColor,
       fontSize,
+      text: ref(''),
+      checked: ref(false),
       styleObject,
       type,
       parentMessage,

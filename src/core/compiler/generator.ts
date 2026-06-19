@@ -312,6 +312,23 @@ function genProps(node: ASTElement, context: CodegenContext) {
             value: `{ display: ${condition} ? '' : 'none' }`
           })
         }
+      } else if (directiveName === 'model') {
+        // v-model 指令：参照 Vue 3 源码及《Vue.js设计与实现》
+        // 对于 input 元素，转换为 :value 和 @input
+        const modelValue = directiveValue || ''
+        
+        // 添加 :value 绑定
+        propEntries.push({
+          key: 'value',
+          value: modelValue
+        })
+        
+        // 添加 @input 事件处理
+        // 使用函数表达式，直接赋值
+        propEntries.push({
+          key: 'onInput',
+          value: `function($event) { ${modelValue} = $event.target.value }`
+        })
       } else {
         // 其他指令：保留为 v-xxx 属性（简化处理）
         propEntries.push({ 
