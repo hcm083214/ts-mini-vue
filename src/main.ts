@@ -1,16 +1,7 @@
 import { createApp, h, reactive, ref, computed } from "./core";
-import TestCom from "./test/TestCom";
-
-const App = { 
-  template: `
-  <div class="container">
-    <TestCom />
-  </div>
-  `,
-  components: {
-    TestCom
-  }
-};
+import App from "./App";
+import router from './router'
 
 const app = createApp(App);
+app.use(router)
 app.mount('#app');

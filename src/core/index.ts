@@ -27,3 +27,21 @@ export {
 
 // 导出编译器
 export { compile } from './compiler'
+
+// 导出路由
+export { 
+    createRouter, 
+    useRouter, 
+    useRoute,
+    RouterView,
+    RouterLink,
+    installRouter,
+    createWebHistory,
+    createWebHashHistory,
+    type Router,
+    type RouteRecord,
+    type RouteRecordRaw,
+    type RouteLocationNormalized,
+    type RouterLinkProps,
+    type RouterViewProps
+} from './vue-router'

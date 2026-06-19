@@ -7,6 +7,9 @@ import { watchEffect } from '../reactivity/index'
 const { render } = createRenderer()
 
 export function createApp(rootComponent: Component) {
+    // 参照 Vue 3 源码：全局组件注册表
+    const globalComponents: Record<string, Component> = {}
+    
     const app = {
         mount(container: HTMLElement | string) {
             const containerElement = typeof container === 'string' 
@@ -16,6 +19,12 @@ export function createApp(rootComponent: Component) {
             if (!containerElement) {
                 throw new Error(`Target container is not a DOM element.`)
             }
+
+            // 参照 Vue 3 源码：将全局组件注入到根组件的 components 选项中
+            if (!rootComponent.components) {
+                rootComponent.components = {}
+            }
+            Object.assign(rootComponent.components, globalComponents)
 
             const vnode = createVNode(rootComponent)
             watchEffect(() => {
@@ -29,6 +38,15 @@ export function createApp(rootComponent: Component) {
                 plugin.install(app)
             }
             return app
+        },
+        // 参照 Vue 3 源码：注册全局组件
+        component(name: string, component: Component) {
+            globalComponents[name] = component
+            return app
+        },
+        // 参照 Vue 3 源码：全局配置
+        config: {
+            globalProperties: {}
         }
     }
     return app

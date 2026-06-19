@@ -138,6 +138,28 @@ export function mountComponent(vnode: VNode, container: HTMLElement): void {
             // 参照 Vue 3 源码及《Vue.js 设计与实现》的实现
             const setupStateProxy = new Proxy(instance.setupState, {
                 get(target, key, receiver) {
+                    // 参照 Vue Router 4：支持 $route 和 $router 全局属性
+                    if (key === '$route') {
+                        const router = (window as any).__ROUTER__
+                        if (router) {
+                            return router.currentRoute.value
+                        }
+                        // 返回默认路由对象，避免 null 导致的错误
+                        return {
+                            path: '/',
+                            fullPath: '/',
+                            name: undefined,
+                            params: {},
+                            query: {},
+                            hash: '',
+                            matched: [],
+                            meta: {}
+                        }
+                    }
+                    if (key === '$router') {
+                        return (window as any).__ROUTER__ || null
+                    }
+                    
                     const value = Reflect.get(target, key, receiver)
                     // 如果值是 ref，自动解包（返回 .value）
                     if (isRef(value)) {
@@ -157,6 +179,10 @@ export function mountComponent(vnode: VNode, container: HTMLElement): void {
                     return Reflect.set(target, key, value, receiver)
                 },
                 has(target, key) {
+                    // 参照 Vue Router 4：$route 和 $router 应该在 with 作用域中可用
+                    if (key === '$route' || key === '$router') {
+                        return true
+                    }
                     // 确保 in 操作符能正确判断属性是否存在
                     return key in target
                 }
