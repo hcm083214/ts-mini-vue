@@ -314,21 +314,53 @@ function genProps(node: ASTElement, context: CodegenContext) {
         }
       } else if (directiveName === 'model') {
         // v-model 指令：参照 Vue 3 源码及《Vue.js设计与实现》
-        // 对于 input 元素，转换为 :value 和 @input
+        // 根据 input 类型区分处理
         const modelValue = directiveValue || ''
         
-        // 添加 :value 绑定
-        propEntries.push({
-          key: 'value',
-          value: modelValue
-        })
+        // 获取 input 的 type 属性（注意：props 中存储的是原始值）
+        const inputType = props['type']
         
-        // 添加 @input 事件处理
-        // 使用函数表达式，直接赋值
-        propEntries.push({
-          key: 'onInput',
-          value: `function($event) { ${modelValue} = $event.target.value }`
-        })
+        if (inputType === 'checkbox') {
+          // checkbox：参照 Vue 3 源码区分单选和多选模式
+          // 获取 checkbox 的 value 属性
+          const checkboxValue = props['value'] !== undefined ? props['value'] : 'on'
+          
+          // checked 属性：如果是数组，判断当前值是否在数组中；否则直接使用 modelValue
+          propEntries.push({
+            key: 'checked',
+            value: `Array.isArray(${modelValue}) ? ${modelValue}.includes(${JSON.stringify(checkboxValue)}) : ${modelValue}`
+          })
+          
+          // onChange 事件：如果是数组，添加或移除当前值；否则直接赋值布尔值
+          propEntries.push({
+            key: 'onChange',
+            value: `function($event) {
+              var _val = ${JSON.stringify(checkboxValue)};
+              var _checked = $event.target.checked;
+              if (Array.isArray(${modelValue})) {
+                var _index = ${modelValue}.indexOf(_val);
+                if (_checked && _index === -1) {
+                  ${modelValue}.push(_val);
+                } else if (!_checked && _index > -1) {
+                  ${modelValue}.splice(_index, 1);
+                }
+              } else {
+                ${modelValue} = _checked;
+              }
+            }`
+          })
+        } else {
+          // 其他类型（text、number等）：使用 value 属性和 input 事件
+          propEntries.push({
+            key: 'value',
+            value: modelValue
+          })
+          
+          propEntries.push({
+            key: 'onInput',
+            value: `function($event) { ${modelValue} = $event.target.value }`
+          })
+        }
       } else {
         // 其他指令：保留为 v-xxx 属性（简化处理）
         propEntries.push({ 
