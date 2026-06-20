@@ -11,7 +11,8 @@ import { mountComponent, updateComponent } from "../runtime-core/component"
 export function patch(n1: VNode | null, n2: VNode, container: HTMLElement): void {
     
     // 如果新旧节点类型不同，卸载旧节点，将 n1 置为 null
-    if (n1 && n1.type !== n2.type) {
+    // 参照 Vue 3 源码：需要处理 Proxy 包装的组件对象
+    if (n1 && !isSameVNodeType(n1, n2)) {
         unmounted(n1.el);
         n1 = null;
     }
@@ -338,7 +339,32 @@ function patchKeyedChildren(
  * @param n2 第二个节点
  */
 function isSameVNodeType(n1: VNode, n2: VNode): boolean {
-    return n1.type === n2.type && n1.key === n2.key;
+    if (n1.key !== n2.key) {
+        return false;
+    }
+    
+    if (n1.type === n2.type) {
+        return true;
+    }
+    
+    // 处理 Proxy 包装的组件对象
+    // 参照 Vue 3 源码：Proxy 包装后引用不同，需要比较底层对象
+    if (typeof n1.type === 'object' && typeof n2.type === 'object' && n1.type !== null && n2.type !== null) {
+        // 比较组件的 name 属性
+        if ((n1.type as any).name && (n2.type as any).name) {
+            return (n1.type as any).name === (n2.type as any).name;
+        }
+        // 比较组件的 template 属性
+        if ((n1.type as any).template && (n2.type as any).template) {
+            return (n1.type as any).template === (n2.type as any).template;
+        }
+        // 比较组件的 setup 函数
+        if ((n1.type as any).setup && (n2.type as any).setup) {
+            return (n1.type as any).setup === (n2.type as any).setup;
+        }
+    }
+    
+    return false;
 }
 
 /**

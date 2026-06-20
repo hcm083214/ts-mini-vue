@@ -11,7 +11,7 @@ const WatchTestCom = {
     </div>
   `,
     setup() {
-        const question = ref('yes')
+        const question = ref('')
         const answer = ref('Questions usually contain a question mark. ;-)')
         const loading = ref(false)
 
@@ -23,7 +23,6 @@ const WatchTestCom = {
                 try {
                     const res = await fetch('https://yesno.wtf/api')
                     answer.value = (await res.json()).answer
-                    console.log("🚀 ~ answer.value:", answer.value)
                 } catch (error) {
                     answer.value = 'Error! Could not reach the API. ' + error
                 } finally {

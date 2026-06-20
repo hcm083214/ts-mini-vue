@@ -7,6 +7,9 @@ const targetMap = new WeakMap<TrackTarget, Map<TrackKey, Set<ReactiveEffect>>>()
 let activeEffect: ReactiveEffect | undefined;
 let shouldTrack = false;
 
+// 缓存 reactive 对象，避免同一对象被多次 Proxy 包装
+const reactiveMap = new WeakMap<object, any>();
+
 class ReactiveEffect {
   fn: () => void;
   deps: Set<ReactiveEffect>[] = [];
@@ -16,15 +19,15 @@ class ReactiveEffect {
   }
 
   run() {
-    
+
     // 清理旧的依赖关系
     this.deps.forEach(dep => dep.delete(this));
     this.deps.length = 0;
-    
+
     try {
       activeEffect = this;
       shouldTrack = true;
-      
+
       return this.fn();
     } finally {
       shouldTrack = false;
@@ -41,18 +44,18 @@ function track(target: TrackTarget, key: TrackKey) {
   if (!shouldTrack || !activeEffect) {
     return;
   }
-  
-  
+
+
   let depsMap = targetMap.get(target);
   if (!depsMap) {
     targetMap.set(target, (depsMap = new Map()));
   }
-  
+
   let deps = depsMap.get(key);
   if (!deps) {
     depsMap.set(key, (deps = new Set()));
   }
-  
+
   if (!deps.has(activeEffect)) {
     deps.add(activeEffect);
     activeEffect.deps.push(deps);
@@ -61,14 +64,14 @@ function track(target: TrackTarget, key: TrackKey) {
 }
 
 function trigger(target: TrackTarget, key: TrackKey) {
-  
+
   const depsMap = targetMap.get(target);
 
   if (!depsMap) {
     console.warn(`[trigger] No depsMap found for target`);
     return;
   }
-  
+
   const deps = depsMap.get(key);
 
   if (deps) {
@@ -87,7 +90,13 @@ function trigger(target: TrackTarget, key: TrackKey) {
 
 // 响应式对象
 function reactive<T extends object>(obj: T): T {
-  return new Proxy(obj, {
+  // 如果已经存在缓存，直接返回
+  const existingProxy = reactiveMap.get(obj);
+  if (existingProxy) {
+    return existingProxy;
+  }
+  
+  const proxy = new Proxy(obj, {
     get(target, key, receiver) {
       track(target, key as TrackKey);
       const res = Reflect.get(target, key, receiver);
@@ -99,6 +108,11 @@ function reactive<T extends object>(obj: T): T {
       return res;
     }
   });
+  
+  // 缓存 Proxy 对象
+  reactiveMap.set(obj, proxy);
+  
+  return proxy;
 }
 
 // 创建 Ref
@@ -307,9 +321,9 @@ function traverse(value: any, seen = new Set()): any {
 }
 
 // 导出所有响应式 API（除了已单独导出的函数）
-export { 
-  reactive, 
-  computed, 
+export {
+  reactive,
+  computed,
   watchEffect,
   watch,
   ReactiveEffect

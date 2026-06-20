@@ -112,7 +112,6 @@ export function mountComponent(vnode: VNode, container: HTMLElement): void {
             const renderCode = compile(component.template)
             
             // 调试：输出完整的编译结果
-            console.log('[Component] Full compiled template:')
             console.log(renderCode)
             
             // 提取函数体
@@ -216,6 +215,10 @@ export function mountComponent(vnode: VNode, container: HTMLElement): void {
             // 首次挂载
             if (instance.render) {
                 try {
+                    // 参照 Vue 3 源码：在 render 之前设置 isMounted = true
+                    // 防止渲染过程中响应式数据变化导致 effect 重入时再次挂载
+                    instance.isMounted = true
+                    
                     let subTree = instance.render()
                     
                     
@@ -230,9 +233,6 @@ export function mountComponent(vnode: VNode, container: HTMLElement): void {
                     if (subTree) {
                         patch(null, subTree, container)
                     }
-                    
-                    // 标记为已挂载
-                    instance.isMounted = true
                 } catch (error) {
                     console.error('[mountComponent] Render error:', error)
                     // Render error handling
