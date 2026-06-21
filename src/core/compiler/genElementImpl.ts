@@ -26,7 +26,10 @@ export function genProps(node: ASTElement, context: CodegenContext) {
         propEntries.push({ key: propName, value: value !== undefined ? String(value) : 'undefined' })
       } else if (key.startsWith('@')) {
         const eventName = key.slice(1)
-        const propKey = `on${eventName.charAt(0).toUpperCase()}${eventName.slice(1)}`
+        // 参照 Vue 3 源码：将 kebab-case 转换为 camelCase
+        // enlarge-text -> enlargeText -> onEnlargeText
+        const camelCaseName = eventName.replace(/-([a-z])/g, (_, c) => c.toUpperCase())
+        const propKey = `on${camelCaseName.charAt(0).toUpperCase()}${camelCaseName.slice(1)}`
         const exprValue = value !== undefined ? String(value) : ''
         
         if (isSimpleIdentifier(exprValue)) {
@@ -150,7 +153,10 @@ export function genPropsWithoutDirective(node: ASTElement, context: CodegenConte
         propEntries.push({ key: propName, value: value !== undefined ? String(value) : 'undefined' })
       } else if (key.startsWith('@')) {
         const eventName = key.slice(1)
-        const propKey = `on${eventName.charAt(0).toUpperCase()}${eventName.slice(1)}`
+        // 参照 Vue 3 源码：将 kebab-case 转换为 camelCase
+        // enlarge-text -> enlargeText -> onEnlargeText
+        const camelCaseName = eventName.replace(/-([a-z])/g, (_, c) => c.toUpperCase())
+        const propKey = `on${camelCaseName.charAt(0).toUpperCase()}${camelCaseName.slice(1)}`
         const exprValue = value !== undefined ? String(value) : ''
         
         if (isSimpleIdentifier(exprValue)) {

@@ -11,14 +11,24 @@
     <script src="./vue.global.js"></script>
     <div id="app"></div>
     <script>
+        const BlogPost = {
+            template: `<h5> {{ title }}</h5>`,
+            props: ['title'],
+        }
         const { createApp, ref, reactive } = Vue
         const comp = {
+            components: {
+                BlogPost
+            },
             template: `        
             <div>
                 <h1 :id="state.title">{{ state.title }}</h1>
                 <p>{{ state.message }}</p>
                 <button @click="increment" :disabled="count >= 2">Click Me</button>
                 <p>Count: {{ count+1 }}</p>
+                <div>
+                    <BlogPost v-for="post in posts" :key="post.id" :title="post.title" />
+                </div>
             </div>`,
             setup() {
                 const state = reactive({
@@ -31,11 +41,16 @@
                 const increment = () => {
                     count.value++;
                 };
-
+                const posts = ref([
+                    { id: 1, title: 'My journey with Vue' },
+                    { id: 2, title: 'Blogging with Vue' },
+                    { id: 3, title: 'Why Vue is so fun' }
+                ])
                 return {
                     state,
                     count,
                     increment,
+                    posts,
                 }
             }
         }

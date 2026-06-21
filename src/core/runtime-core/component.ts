@@ -89,9 +89,28 @@ export function mountComponent(vnode: VNode, container: HTMLElement): void {
 
     // 执行 setup 函数
     if (component.setup) {
-        const setupContext: ComponentContext = {
-            emit: (event: string, ...args: any[]) => {
+        // 参照 Vue 3 源码实现 emit 函数
+        const emit: (event: string, ...args: any[]) => void = (event: string, ...args: any[]) => {
+            // 将事件名转换为 onXxx 格式
+            // enlarge-text -> enlargeText -> onEnlargeText
+            const handlerName = `on${event.charAt(0).toUpperCase()}${event.slice(1).replace(/-([a-z])/g, (_, c) => c.toUpperCase())}`
+            
+            // 从 vnode.props 中获取监听器
+            const handler = instance.vnode.props?.[handlerName]
+            
+            if (handler) {
+                // 调用监听器函数
+                if (typeof handler === 'function') {
+                    handler(...args)
+                } else if (Array.isArray(handler)) {
+                    // Vue 3 支持多个监听器
+                    handler.forEach(h => h(...args))
+                }
             }
+        }
+        
+        const setupContext: ComponentContext = {
+            emit
         }
         
         const setupResult = component.setup(instance.props, setupContext)
